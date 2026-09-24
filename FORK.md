@@ -32,9 +32,9 @@
 - 权威上游：`chuspeeism/dashi-taskboard`
 - 上游默认分支：`main`
 - GitHub Fork 创建时间：`2026-08-03T14:40:11Z`
-- 本次合并的上游父提交：`1528a8eb31466829ca5a9fd436f4dfd285694a74`
-- 精确已合并上游基线：`1528a8eb31466829ca5a9fd436f4dfd285694a74`
-- 比较范围：`1528a8eb31466829ca5a9fd436f4dfd285694a74..HEAD`
+- 本次合并的上游父提交：`ef90f5bd3f29e9587945abc35c15518f1e6a9311`
+- 精确已合并上游基线：`ef90f5bd3f29e9587945abc35c15518f1e6a9311`
+- 比较范围：`ef90f5bd3f29e9587945abc35c15518f1e6a9311..HEAD`
 
 持续移动的 `upstream/main` 只有在祖先关系证明它与上述 SHA 相同时才是本文档基线；后续新提交仍属于待合并候选。合并提交本身的 Fork 侧父提交不是比较基线。
 
@@ -53,6 +53,8 @@
 本轮合入 `c346e8e`：采用上游 Jira 配置与同步串行化、AI 权限映射与子进程收尾、CLI 请求处理复用、任务关系批量读取、评论附件重试与文档模型抽取、稳定实时订阅及看板计算优化。文档模型保留 Fork 的稳定 issue/image 剪贴板标识；Dashboard 模块提取保留总结梯度重试入口；实时订阅保留 Jira/claim 活动刷新。原生启动器采用结构化事件并保留 renderer 就绪与实际打开确认。合并保留 Fork 的 Bearer 认证、原生会话和结构化 Skill 引用、稳定附件引用、私有宿主鉴权与桌面启动所有权。更新包与元数据生成现按 Fork 仓库、标签、签名公钥适配，不能发布上游品牌或使用上游更新公钥。Fork 的已有本地输入验证覆盖 Jira 与原生绑定字段，因此不恢复缺失依赖的上游 task-input 模块；批量关系读取独立吸收。
 
 本轮合入 `1528a8e`：吸收父任务详情创建子任务、按顶层任务加权的项目完成度、名称/优先级排序、创建日期开关、正文与评论附件回显及本机文件操作、外部 Agent 会话归属与恢复命令、Jira Cloud 增强搜索分页及头像修复。上游新增字段移植到 Fork 现有本地/Cloud 校验与记录映射，不恢复已删除的共享重构文件；新 Cloud 迁移使用 `0013_agent_sessions.sql` 和 `0014_attachment_body_fallback.sql` 避免编号碰撞。Fork 保留 `panel:` 消息协议、独立版本与标签发布流程、工作流仅查询 Skills，以及基于 MemoryRouter 的导航历史，不恢复上游设置标题匹配关闭分支。
+
+本轮同步 `ef90f5b`：吸收 Windows 安装版 `panelctl` 入口，并保留自动化响应中的 `idleReason` 协议字段。上游“所有待办等待权限时暂停”实现依赖旧的 Taskboard 定时任务和临时判断会话；Fork 已由持久化 Claim Queue、依赖状态和阻塞恢复流程承担同一自动执行入口，因此不引入第二套旧定时任务路径或其 Taskboard 命名。产品名、`panelctl` 和当前 Codex Panel 自动化入口保持不变。
 
 子任务入口适配（本轮独立功能提交，长期保留）：详情页的直接创建子任务仅用于普通任务；Jira 需求继续通过已有规划与关联执行任务流程拆分。代码：`web/src/components/TaskDetail.tsx`；验证：`web/src/components/TaskDetail.spec.tsx` 同时覆盖普通任务创建入口与 Jira 原流程。用户文档：中英文 README 与 `docs/fork-capabilities.md#task-organization-and-external-sessions`。来源定位：`git log -S'currentTask.source === "local" ? () => onCreateChild' -- web/src/components/TaskDetail.tsx`。上游若支持 Fork 的 Jira 规划与跨仓库关联约束，再评估吸收此适配。
 

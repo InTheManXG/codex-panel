@@ -1663,6 +1663,7 @@
               item: response.item,
               items: response.items,
               quota: response.quota,
+              idleReason: response.idleReason,
               policy: response.policy,
               state: response.state,
               run: response.run,

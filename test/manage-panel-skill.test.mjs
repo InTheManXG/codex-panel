@@ -13,6 +13,7 @@ const cliReference = await readFile(
 
 test("the Panel skill selects the injected or packaged CLI without guessing", () => {
   assert.match(skillSource, /exact `panelctl` binary and Panel URL supplied/i);
+  assert.match(skillSource, /On Windows[\s\S]*LOCALAPPDATA\\Codex Panel\\bin\\panelctl\.cmd/);
   assert.match(skillSource, /On Linux[\s\S]*desktop app adds its packaged wrapper/i);
   assert.match(skillSource, /do not reconstruct its tokenized URL/i);
 });
