@@ -187,6 +187,13 @@
         visibility: visible !important;
         pointer-events: auto !important;
       }
+      /* Preserve the native titlebar's drag shell, not its task-specific content. */
+      [${HOST_ATTRIBUTE}="true"] [data-app-shell-titlebar="true"] {
+        visibility: visible !important;
+      }
+      [${HOST_ATTRIBUTE}="true"] [data-app-shell-main-titlebar="true"] {
+        visibility: hidden !important;
+      }
       :root[data-codex-taskboard-open="true"] nav[data-app-navigation-rail] button[data-selected]:not(#${ENTRY_ID}):not(:hover) {
         color: var(--button-text-color) !important;
       }
