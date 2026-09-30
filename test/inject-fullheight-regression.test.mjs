@@ -48,7 +48,7 @@ async function chromeExecutable() {
   return null;
 }
 
-function fixtureHtml(origin) {
+function fixtureHtml(origin, freeSidebar) {
   const encodedSource = Buffer.from(source).toString("base64");
   return `<!doctype html>
 <html>
@@ -68,12 +68,13 @@ function fixtureHtml(origin) {
   <body>
     <aside>
       <nav role="navigation">
+        ${freeSidebar ? '<button><svg></svg><span class="text-fade-truncate">新聊天</span></button>' : ''}
         <div data-app-action-sidebar-scroll>
-          <div>
+          ${freeSidebar ? '' : `<div>
             <button><span>首页</span></button>
             <button><span>站点</span></button>
             <button><svg></svg><span class="text-fade-truncate">插件</span></button>
-          </div>
+          </div>`}
           <section data-app-action-sidebar-section>
             <div data-app-action-sidebar-section-heading="项目">项目</div>
           </section>
@@ -184,7 +185,8 @@ function fixtureHtml(origin) {
         window.__browserPanelClosed = true;
       });
     </script>
-    <script>eval(atob(${JSON.stringify(encodedSource)}));</script>
+    <!-- 注入脚本包含中文标签，Base64 字节须按 UTF-8 解码，避免测试把中文变成乱码。 -->
+    <script>eval(new TextDecoder().decode(Uint8Array.from(atob(${JSON.stringify(encodedSource)}), (char) => char.charCodeAt(0))));</script>
     <script>
       (async () => {
         const publishHeartbeat = () => window.postMessage({
@@ -236,7 +238,8 @@ function fixtureHtml(origin) {
 </html>`;
 }
 
-test("Panel fills the workspace, opens HTTPS links and revokes hostile iframe navigation", async (t) => {
+for (const freeSidebar of [false, true]) {
+test(`Panel loads from ${freeSidebar ? "Free" : "Plugins"} sidebar, fills workspace and verifies frame boundaries`, async (t) => {
   const chrome = await chromeExecutable();
   if (!chrome) {
     t.skip("Chrome or Chromium is not installed");
@@ -275,7 +278,7 @@ test("Panel fills the workspace, opens HTTPS links and revokes hostile iframe na
     }
     const origin = `http://127.0.0.1:${server.address().port}`;
     response.setHeader("content-type", "text/html; charset=utf-8");
-    response.end(fixtureHtml(origin));
+    response.end(fixtureHtml(origin, freeSidebar));
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => {
@@ -324,6 +327,13 @@ test("Panel fills the workspace, opens HTTPS links and revokes hostile iframe na
       encodedResult = evaluation.result.value;
       if (!encodedResult) await new Promise((resolve) => setTimeout(resolve, 50));
     }
+    if (!encodedResult) {
+      const diagnostic = await session.send("Runtime.evaluate", {
+        expression: 'JSON.stringify({error:window.__injectionError,entry:document.getElementById("codex-panel-entry")?.outerHTML,ready:window.__codexPanelInjection__?.ready,status:document.getElementById("codex-panel-status")?.textContent,body:document.querySelector("aside")?.innerHTML})',
+        returnByValue: true,
+      });
+      throw new Error(diagnostic.result.value);
+    }
   } finally {
     session?.close();
     browser.close();
@@ -366,3 +376,5 @@ test("Panel fills the workspace, opens HTTPS links and revokes hostile iframe na
     injectionError: null,
   });
 });
+
+}

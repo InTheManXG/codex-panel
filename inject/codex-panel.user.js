@@ -335,20 +335,26 @@
       return destinations.find((node) => buttonMatches(node, PLUGIN_LABELS)) || destinations.at(-1);
     }
     const scroll = document.querySelector("[data-app-action-sidebar-scroll]");
-    if (!scroll) return null;
-    const buttons = Array.from(scroll.querySelectorAll('button, a.sidebar-item, [role="button"].sidebar-item'))
+    const buttons = Array.from(scroll?.querySelectorAll('button, a.sidebar-item, [role="button"].sidebar-item') || [])
       .filter((button) => button.getAttribute(OWNED_ATTRIBUTE) !== "true");
     const plugin = buttons.find((button) => buttonMatches(button, PLUGIN_LABELS));
     if (plugin) return plugin;
 
-    const firstSection = scroll.querySelector("[data-app-action-sidebar-section]");
-    if (!firstSection) return null;
-    const sectionTop = firstSection.getBoundingClientRect().top;
-    return buttons.filter((button) => {
+    const firstSection = scroll?.querySelector("[data-app-action-sidebar-section]");
+    const sectionTop = firstSection?.getBoundingClientRect().top;
+    const reference = buttons.filter((button) => {
       const rect = button.getBoundingClientRect();
       return rect.height > 0
         && rect.bottom <= sectionTop;
-    }).at(-1) || null;
+    }).at(-1);
+    if (reference) return reference;
+
+    // Free 账号可能没有插件、宠物或 destination 行；仅在主侧边栏内借用新聊天入口。
+    const root = sidebar || document.querySelector("aside");
+    return Array.from(root?.querySelectorAll('button, a, [role="button"]') || [])
+      .find((node) => node.getAttribute(OWNED_ATTRIBUTE) !== "true"
+        && !node.closest("[inert]") && node.getBoundingClientRect().height > 0
+        && buttonMatches(node, ["新聊天", "新对话", "新增聊天", "新對話", "new chat", "new thread"])) || null;
   }
 
   function replaceEntryIcon(button) {
@@ -360,7 +366,14 @@
       icon.setAttribute("class", "icon-leading");
       slot.replaceChildren(icon);
     }
-    if (!icon) return;
+    // 无独立文字节点的参考行会被替换为纯文字，仍需补上自己的图标。
+    if (!icon) {
+      icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("class", "icon-leading");
+      icon.setAttribute("width", "20");
+      icon.setAttribute("height", "20");
+      button.prepend(icon);
+    }
     icon.setAttribute("aria-hidden", "true");
     icon.setAttribute("viewBox", "0 0 24 24");
     icon.setAttribute("fill", "none");

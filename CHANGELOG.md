@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Support sidebars without Plugins or pets, including Free accounts: mount Panel after New chat when no existing navigation row is available.
+
 - Keep the Panel board icon when the native sidebar reference row uses a pet avatar.
 
 - Fix Panel opening with the updated Codex Data Router and mount it in the visible workspace when inactive conversations remain in the DOM.

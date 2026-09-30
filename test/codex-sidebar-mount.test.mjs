@@ -29,7 +29,7 @@ test("new sidebar destinations outside the scroll area mount exactly one functio
     const entry=f.dom.window.document.getElementById("codex-panel-entry");
     assert.ok(entry);
     assert.equal(f.dom.window.document.querySelectorAll("#codex-panel-entry").length,1);
-    assert.equal(entry.textContent,"任务面板");
+    assert.equal(entry.textContent.trim(),"任务面板");
     assert.equal(entry.hasAttribute("href"),false);
     assert.equal(entry.hasAttribute("data-sidebar-destination"),false);
     assert.equal(entry.hasAttribute("aria-labelledby"),false);
@@ -52,4 +52,42 @@ test("legacy scroll area accepts native link and role-button rows", () => {
     const f=fixture(`<div data-app-action-sidebar-scroll>${row}</div>`);
     f.api.ensureEntry();assert.ok(f.dom.window.document.getElementById("codex-panel-entry"));
   }
+});
+
+test("Free sidebar mounts after New chat without plugins, pets or destination attributes", () => {
+  for (const container of ['aside', 'div data-slate-sidebar-content']) {
+    for (const label of ['新聊天', 'New chat']) {
+      const tag = container.split(' ')[0];
+      const f = fixture(`<${container}><a id="new-chat" href="/" class="sidebar-item"><svg></svg>${label}</a><div data-app-action-sidebar-scroll><section data-app-action-sidebar-section>没有项目</section></div></${tag}>`);
+      try {
+        f.api.ensureEntry();
+        f.api.ensureEntry();
+        const { document, KeyboardEvent } = f.dom.window;
+        const entry = document.getElementById('codex-panel-entry');
+        assert.equal(document.querySelectorAll('#codex-panel-entry').length, 1);
+        assert.equal(entry.previousElementSibling.id, 'new-chat');
+        assert.equal(entry.textContent.trim(), '任务面板');
+        assert.ok(entry.querySelector('svg rect'));
+        assert.equal(entry.hasAttribute('href'), false);
+        entry.click();
+        entry.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+        assert.equal(f.opened, 2);
+        assert.equal(document.getElementById('new-chat').getAttribute('href'), '/');
+        const oldRoot = entry.parentElement;
+        const newRoot = oldRoot.cloneNode(true);
+        newRoot.querySelector('#codex-panel-entry').remove();
+        oldRoot.replaceWith(newRoot);
+        f.api.ensureEntry();
+        assert.equal(entry.parentElement, newRoot);
+      } finally { f.dom.window.close(); }
+    }
+  }
+});
+
+test("Free fallback ignores chat-area controls and hidden or inert sidebar rows", () => {
+  const f = fixture('<main><button>新聊天</button></main><aside><button hidden>新聊天</button><div inert><button>New chat</button></div></aside>');
+  try {
+    f.api.ensureEntry();
+    assert.equal(f.dom.window.document.getElementById('codex-panel-entry'), null);
+  } finally { f.dom.window.close(); }
 });
