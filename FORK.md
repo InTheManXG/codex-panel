@@ -26,6 +26,13 @@
 
 模型目录读取（本次修复，等待上游吸收）：Jira 显式绑定、规划/重新规划登记、聊天创建/设置/发送的共享模型目录必须使用 Codex `model/list` 分页元数据并耗尽 `nextCursor`，不得恢复 `debug models` 的完整提示词导出或仅调大缓冲区。工作流仍只查询 Skills，本地 Skill 符号链接补齐保持不变。代码 `server/ai-chat-catalog.mjs`、`server/codex-app-server.mjs`；本地查询在目标仓库目录运行并在读取后关闭子进程。验证 `node --test test/jira-planning.test.mjs test/ai-chat-runner.test.mjs test/ai-chat-server.test.mjs test/claim-queue.test.mjs test/jira-lifecycle.test.mjs test/workflow-settings.test.mjs`，包括 3 MiB debug 导出场景下 CLI 绑定、Spec 保存、重新规划和分页元数据字段保留。用户入口：中英文 README，详细说明 `docs/fork-capabilities.md#link-jira-requirements-to-repository-issues`；来源定位 `git log -S'async function listModels(appServer)' -- server/ai-chat-catalog.mjs`。合并时保留统一目录路径，上游具备等价实现与验证后移除。
 
+### 新版 Codex 导航兼容
+
+- 生命周期：`等待上游吸收`；分类：内部兼容性修复，保持既有任务面板入口与原生返回行为。
+- 原因与不变量：新版 Data Router 的 navigator 不再提供 location；使用 `router.state.location`、`navigate` 与 `subscribe`，在导航实际提交后同步面板，并在销毁时取消订阅。旧版 MemoryRouter 保留现有实现。多个会话常驻 DOM 时选择可见工作区；面板隐藏原内容后继续复用已挂载区域，不挂到隐藏会话。
+- 代码与验证：`inject/codex-panel.user.js`、`test/inject.test.mjs`；`node --test test/inject.test.mjs test/inject-fullheight-regression.test.mjs`，覆盖新旧导航、异步提交、前进返回、订阅清理及隔离 Chromium 实际挂载。实际安装版本仅在当前窗口应用修复后核对面板 ready 与可见尺寸，不改任务数据库。
+- 来源定位：`git log -S'router.subscribe(syncNativeNavigation)' -- inject/codex-panel.user.js`。合并时保留导航提交时机和可见区域选择；上游提供等价兼容后移除此项。
+
 ## 精确上游基线
 
 - Fork 分支：`main`

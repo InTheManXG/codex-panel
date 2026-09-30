@@ -407,11 +407,16 @@
   }
 
   function findPageHost() {
-    const direct = document.querySelector(".app-shell-main-content-frame");
-    if (direct?.closest?.("[data-app-shell-main-content-layout]")) return direct;
-
-    const viewport = document.querySelector("[data-app-shell-main-content-layout]");
+    // 新版 Codex 保留多个隐藏工作区；面板打开后原内容被隐藏，继续复用已挂载的区域。
+    const viewport = Array.from(document.querySelectorAll("[data-app-shell-main-content-layout]"))
+      .find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        return (rect.width > 0 && rect.height > 0)
+          || (page?.isConnected && page.parentElement === candidate.parentElement);
+      });
     if (!viewport) return null;
+    const direct = viewport.querySelector(".app-shell-main-content-frame");
+    if (direct) return direct;
     const viewportRect = viewport.getBoundingClientRect();
     return Array.from(viewport.children).find((candidate) => {
       const rect = candidate.getBoundingClientRect();
@@ -2346,6 +2351,21 @@
     // Do not call listen(): memory history has a single listener owned by React.
     for (let fiber = surface?.[fiberKey]; fiber; fiber = fiber.return) {
       const props = fiber.memoizedProps;
+      // 新版 Data Router 的 navigator 没有 location；通过 router 的状态与订阅跟随原生导航。
+      const router = props?.router || props?.value?.router;
+      if (router?.state?.location && typeof router.navigate === "function" && typeof router.subscribe === "function") {
+        nativeNavigator = {
+          get location() { return router.state.location; },
+          push(path, state) { return router.navigate(path, { state }); },
+          go(delta) { return router.navigate(delta); },
+        };
+        const unsubscribe = router.subscribe(syncNativeNavigation);
+        detachNativeNavigation = () => {
+          unsubscribe();
+          nativeNavigator = null;
+        };
+        return true;
+      }
       const navigator = props?.navigator || props?.value?.navigator;
       if (!navigator?.location || !["push", "replace", "go"].every((name) => typeof navigator[name] === "function")) continue;
       nativeNavigator = navigator;
