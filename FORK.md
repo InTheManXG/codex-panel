@@ -1,5 +1,22 @@
 # Fork 维护说明
 
+本次整合 `codex/latest-codex-compat` 至 `310cec5`，保留其新版 CLI、发送适配、侧边栏挂载和断线重连；同时保留 `57a4ae5` 的 Data Router / 可见工作区修复及 `0ed6707` 的面板图标替换。内部兼容行为沿用各条目契约，合并验证包含相关 Node 测试、隔离 Chromium 挂载及通用安装包校验。
+
+26.928.20755 侧边栏挂载（等待上游吸收）：官方 app-initial-74096abaa6b3.js 的导航使用 `data-slate-sidebar-content`、`data-sidebar-destination`，部分原生行渲染为链接或 role=button 的 div。入口定位优先新版侧边栏目的地，旧滚动区域兼容链接及 role 按钮；克隆后去除 href、aria-labelledby、原生导航 data 标记，非 button 保留 Enter/Space 激活。代码 `inject/codex-panel.user.js`；`test/codex-sidebar-mount.test.mjs` 验证新版滚动区域外的导航项、旧结构、唯一入口、键盘激活和侧边栏重建后的重新挂载；已有 `test/inject.test.mjs` 同步选择器 fixture。错误提示不再将未挂载直接归因为用户没打开主窗口。实际 Codex UI 自动化被工具限制，验证为源码核对、隔离 DOM 与打包检查，现场恢复仍待确认。
+
+分离窗口识别（等待上游吸收）：用户现场日志确认 `detached-window.html?initialRoute=%2Fdetached-window` 无 Panel 入口。injector 按 URL 路径及解析后的 initialRoute 排除此类窗口，避免重载和注入分离聊天；入口未挂载或 source hash 不符时不得返回注入成功；只有主窗口存在时才注入，无主窗口时明确提示打开含项目侧边栏的主窗口。代码 `scripts/codex-injector.mjs`；验证 `test/codex-window-target.test.mjs` 覆盖现场 URL、编码路由、主窗口保留、两条注入路径超时后清理连接。真实登录后挂载仍需现场验证；可选 quota adapter 不可用不等于 CDP 断连。
+
+连接恢复（等待上游吸收）：调试端口中断后，macOS 常驻 injector 重新发现有效 Codex 端口、清理旧连接并更新运行描述；启动等待普通 Codex 退出期间也探测新出现的有效端口。失效候选不阻止后续候选探测。`waitingForCodex.message` 将端口和底层错误码传给启动器，提示实际“重启服务”入口，保留本机回环与原有原点校验。不自动关闭用户 Codex。代码：`scripts/codex-injector.mjs`、`src-tauri/src/main.rs`；针对性验证：`test/codex-reconnect.test.mjs` 和 `test/injector.test.mjs`。用户日志只证明连接请求失败，最初断连原因尚未确认；不得把模拟端口恢复或构建成功描述为用户现场已恢复。上游具备等价发现与错误显示后移除此条目。
+
+## 2026-09-30 最新版兼容
+
+- 生命周期：等待上游吸收。目的：修复官方 ChatGPT 26.928.20755 将 CLI 移入包目录后，程序发现和启动签名校验仍使用旧路径的问题。
+- 不变量：macOS 优先使用 `Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`，旧布局仍使用 `Contents/Resources/codex`；启动器继续校验官方应用和实际二进制的签名、`Identifier=codex`、`TeamIdentifier=2DC432GLL2`，不改用未签名 shell 包装脚本，不修改官方应用。代码：`shared/codex-executable.mjs`、`src-tauri/src/main.rs`。
+- 项目模型选择与请求校验共用 `shared/panel-automation-options.mjs`，类型同步于 `.d.mts`；新增 `gpt-6.1-sol`、`gpt-6-sol`、`gpt-6-luna`，推理强度与默认值取自官方 CLI 0.159.2 的实际 `model/list`。保留已保存模型及自动化默认设置。同步现有目录断言：`test/panel-automation.test.mjs`。
+- 来源基线：`shay-wong/codex-panel` 的 `9628e79`；提交后可用 `git log -S'codex-cli' -- shared/codex-executable.mjs` 定位。合并时保留真实二进制的签名校验；上游提供等价目录支持与模型选项后移除此差异。
+- 用户入口：中英文 README；验证范围和限制：`docs/codex-compatibility.md`；索引：`docs/fork-capabilities.md`；发布记录：中英文 CHANGELOG。按本文件维护契约手工维护，当前环境未提供 fork-doc 技能。
+- 新版 composer 的提交门增加会话状态及 `isLoading` 条件；`scripts/codex-provider-quota.mjs` 识别扩展表达式但完整保留所有非额度条件。`test/codex-provider-quota.test.mjs` 的新版 fixture 验证加载中、会话不可用、待建会话和安全策略仍禁止提交；实际 `app-primary-92c16ff2fe4e.js` 改写后通过语法检查。沿用原有默认关闭、自定义本地 provider 限定及未知结构不改写约定；真实登录后发送尚未验证。
+
 
 继续规划导航确认（本次修复）：公共会话识别优先读取 `activeThreadRow` 的实际激活 ID，再回退 URL；不能使用导航前写入的 `lastNativeThreadId` 当作打开成功证据。此契约同时适用于预填前检查和发送后的绑定确认。代码 `inject/codex-panel.user.js`；验证 `node --test test/inject.test.mjs`，覆盖 URL 不变但正确会话已激活，以及其他会话激活时禁止预填；定位 `git log -S'Native in-app navigation' -- inject/codex-panel.user.js`。
 本文档是 `shay-wong/codex-panel` 面向维护者和 AI 编码代理的活跃差异台账，只记录相对于 `chuspeeism/dashi-taskboard` 有意保留的行为差异。

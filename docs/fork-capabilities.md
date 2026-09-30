@@ -1,5 +1,7 @@
 # Fork capabilities
 
+For the 2026-09-30 desktop/CLI compatibility target, packaged macOS executable layout, new model options, and validation limits, see [Codex compatibility](codex-compatibility.md).
+
 Panel participates in Codex’s native navigation history: Back returns to the page before Panel, Forward reopens Panel, and navigating from Panel to a native destination adds that destination to the same history. Route changes control visibility without matching button or command labels; utility actions that do not navigate leave Panel open.
 
 

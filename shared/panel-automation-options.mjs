@@ -1,9 +1,27 @@
 export const AUTOMATION_MODELS = [
   {
+    label: "6.1 Sol",
+    slug: "gpt-6.1-sol",
+    defaultEffort: "low",
+    efforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+  },
+  {
     label: "6 Astra",
     slug: "gpt-6-astra",
     defaultEffort: "low",
     efforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+  },
+  {
+    label: "6 Sol",
+    slug: "gpt-6-sol",
+    defaultEffort: "medium",
+    efforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+  },
+  {
+    label: "6 Luna",
+    slug: "gpt-6-luna",
+    defaultEffort: "medium",
+    efforts: ["low", "medium", "high", "xhigh", "max"],
   },
   {
     label: "5.6 Sol",

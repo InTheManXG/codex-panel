@@ -300,7 +300,7 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
   let currentSection;
   const scroll = {
     querySelector: (selector) => selector === "[data-app-action-sidebar-section]" ? currentSection : null,
-    querySelectorAll: (selector) => selector === "button" ? currentButtons : [],
+    querySelectorAll: (selector) => selector.startsWith("button") ? currentButtons : [],
   };
   const findReferenceButton = vm.runInNewContext(`(() => {
     const PLUGIN_LABELS = ["插件", "外掛程式", "plugins", "プラグイン"];

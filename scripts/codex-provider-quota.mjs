@@ -16,20 +16,21 @@ function composerSignature(source, sourceUrl) {
   })).filter(({body}) => body.includes('"data-codex-composer-root"') && body.includes('`misalignmentPolicyViolation`'));
   if (composers.length === 1) {
     const {entry, body} = composers[0];
-    const gates = [...body.matchAll(new RegExp(`(${identifier})=(${identifier})\\|\\|(${identifier})\\|\\|(${identifier})\\|\\|(${identifier})\\|\\|(${identifier})(?=[,;])`, "g"))]
+    const gates = [...body.matchAll(new RegExp(`(${identifier})=(${identifier})\\|\\|(${identifier})\\|\\|((?:${identifier}&&${identifier}\\|\\|${identifier}\\|\\|)?)(${identifier})(\\|\\|${identifier}\\?\\.isLoading===!0)?\\|\\|(${identifier})\\|\\|(${identifier})(?=[,;])`, "g"))]
       .filter(match => body.includes(`submitDisabled:${match[1]},`)
-        && body.includes(`${match[4]}=`) && body.includes('codexErrorInfo===`misalignmentPolicyViolation`'));
+        && body.includes(`${match[5]}=`) && body.includes('codexErrorInfo===`misalignmentPolicyViolation`'));
     const readers = [...source.matchAll(/let\{cwd:([\w$]+),hostId:([\w$]+)\}=([\w$]+)\.get\(([\w$]+),([\w$]+)\);if\(\2!==`local`\)return null;let\{data:([\w$]+)\}=\3\.get\(([\w$]+),\{cwd:\1,hostId:\2\}\);return \6==null\|\|\(\3\.get\(([\w$]+),\5\)\?\?\6\.model_provider\?\?`openai`\)!==`openai`/g)];
     const react = body.match(/\(0,([\w$]+)\.useState\)/)?.[1];
     if (gates.length === 1 && readers.length === 1 && react) {
       const gate = gates[0], reader = readers[0];
-      const host = body.match(new RegExp(`${escapePattern(gate[6])}=${identifier}\\(${identifier}\\)&&(${identifier})===\x60local\x60`))?.[1];
+      const host = body.match(new RegExp(`${escapePattern(gate[8])}=${identifier}\\(${identifier}\\)&&(${identifier})===\x60local\x60`))?.[1];
       const thread = host && body.match(new RegExp(`${escapePattern(host)}=${identifier}\\(${identifier},(${identifier})\\)`))?.[1];
       const stores = thread ? [...new Set([...body.matchAll(new RegExp(`(${identifier})\\.get\\(${identifier},${escapePattern(thread)}\\)`, "g"))].map(match => match[1]))] : [];
-      const hostQuota = host && body.includes(`${gate[5]}=`) && new RegExp(`${escapePattern(gate[5])}=${identifier}\\(${identifier},${escapePattern(host)}\\)`).test(body);
-      const policy = new RegExp(`${escapePattern(gate[4])}=${identifier}===\x60failed\x60&&${identifier}\\?\\.codexErrorInfo===\x60misalignmentPolicyViolation\x60`).test(body);
+      const hostQuota = host && body.includes(`${gate[7]}=`) && new RegExp(`${escapePattern(gate[7])}=${identifier}\\(${identifier},${escapePattern(host)}\\)`).test(body);
+      const policy = new RegExp(`${escapePattern(gate[5])}=${identifier}===\x60failed\x60&&${identifier}\\?\\.codexErrorInfo===\x60misalignmentPolicyViolation\x60`).test(body);
       if (hostQuota && policy && thread && stores.length === 1) {
-        return {entry, react, gate: gate[0], blockers: gate.slice(2, 5).join("||"), quotas: gate.slice(5, 7).join("||"), host, thread, store: stores[0], target: reader[4], provider: reader[8], config: reader[7]};
+        const blockers = `${gate[2]}||${gate[3]}||${gate[4]}${gate[5]}${gate[6] ?? ""}`;
+        return {entry, react, gate: gate[0], blockers, quotas: gate.slice(7, 9).join("||"), host, thread, store: stores[0], target: reader[4], provider: reader[8], config: reader[7]};
       }
     }
   }

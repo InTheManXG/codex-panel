@@ -327,9 +327,16 @@
   }
 
   function findReferenceButton() {
+    const sidebar = document.querySelector("[data-slate-sidebar-content]");
+    const destinations = Array.from(sidebar?.querySelectorAll("[data-sidebar-destination]") || [])
+      .filter((node) => node.getAttribute(OWNED_ATTRIBUTE) !== "true"
+        && !node.closest("[inert]") && node.getBoundingClientRect().height > 0);
+    if (destinations.length > 0) {
+      return destinations.find((node) => buttonMatches(node, PLUGIN_LABELS)) || destinations.at(-1);
+    }
     const scroll = document.querySelector("[data-app-action-sidebar-scroll]");
     if (!scroll) return null;
-    const buttons = Array.from(scroll.querySelectorAll("button"))
+    const buttons = Array.from(scroll.querySelectorAll('button, a.sidebar-item, [role="button"].sidebar-item'))
       .filter((button) => button.getAttribute(OWNED_ATTRIBUTE) !== "true");
     const plugin = buttons.find((button) => buttonMatches(button, PLUGIN_LABELS));
     if (plugin) return plugin;
@@ -376,6 +383,14 @@
     button.removeAttribute("aria-controls");
     button.removeAttribute("aria-describedby");
     button.removeAttribute("data-state");
+    button.removeAttribute("href");
+    button.removeAttribute("aria-labelledby");
+    button.removeAttribute("aria-current");
+    for (const name of button.getAttributeNames()) {
+      if (name.startsWith("data-app-action-") || name.startsWith("data-sidebar-") || name.startsWith("data-slate-sidebar-")) button.removeAttribute(name);
+    }
+    button.setAttribute("role", "button");
+    button.setAttribute("tabindex", "0");
     button.setAttribute("aria-label", "打开任务面板");
     button.setAttribute("title", "任务面板");
     button.setAttribute(OWNED_ATTRIBUTE, "true");
@@ -390,6 +405,14 @@
       event.stopPropagation();
       openPanel();
     });
+    if (button.tagName !== "BUTTON") {
+      button.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        button.click();
+      });
+    }
     return button;
   }
 

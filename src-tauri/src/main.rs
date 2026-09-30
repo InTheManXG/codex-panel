@@ -137,7 +137,10 @@ struct RendererStatus {
 #[derive(Deserialize)]
 #[serde(tag = "launcherEvent", rename_all = "camelCase")]
 enum LauncherEvent {
-    WaitingForCodex,
+    WaitingForCodex {
+        #[serde(default)]
+        message: Option<String>,
+    },
     ServiceReady,
     OpenSignalReady,
     PanelOpened,
@@ -1046,8 +1049,14 @@ fn verify_windows_launcher_signature() -> Result<(), String> {
 #[cfg(target_os = "macos")]
 fn verify_codex_app(path: &Path) -> Result<(), String> {
     verify_signed_component(path, "com.openai.codex", "2DC432GLL2", true)?;
+    let packaged = path.join("Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex");
+    let executable = if packaged.exists() {
+        packaged
+    } else {
+        path.join("Contents/Resources/codex")
+    };
     verify_signed_component(
-        &path.join("Contents/Resources/codex"),
+        &executable,
         "codex",
         "2DC432GLL2",
         false,
@@ -1938,7 +1947,13 @@ fn watch_launcher_output<R: std::io::Read + Send + 'static>(
                     return;
                 }
                 match event {
-                    LauncherEvent::WaitingForCodex | LauncherEvent::ServiceReady => {
+                    LauncherEvent::WaitingForCodex { message } => {
+                        apply_waiting_for_codex(snapshot);
+                        if let Some(message) = message.filter(|value| !value.trim().is_empty()) {
+                            snapshot.message = message;
+                        }
+                    }
+                    LauncherEvent::ServiceReady => {
                         apply_waiting_for_codex(snapshot);
                     }
                     LauncherEvent::OpenSignalReady => {
