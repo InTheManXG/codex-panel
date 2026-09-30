@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Preserve custom-provider adaptation on reinjection by discovering the current composer URL from existing import maps after blob loading.
+
 - Place Panel below the complete New chat row so it does not squeeze or cover New chat and Quick chat.
 
 - Support sidebars without Plugins or pets, including Free accounts: mount Panel after New chat when no existing navigation row is available.

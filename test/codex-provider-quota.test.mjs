@@ -206,3 +206,35 @@ test("ambiguous or changed quota structures keep the native module", () => {
   assert.equal(rewriteCodexProviderQuota(currentSource.replace("cn=ye||$e||ot||nt||Rt", "cn=ye||$e||ot||nt&&Rt"), url), null);
   assert.equal(rewriteCodexProviderQuota(currentSource + currentSource, url), null);
 });
+
+
+test("reinstallation discovers the original composer from import maps after blob loading", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "panel-quota-reinstall-"));
+  t.after(() => rm(directory, {recursive: true, force: true}));
+  const preferencesFile = join(directory, "preferences.json");
+  await writeFile(preferencesFile, JSON.stringify({customProviderQuotaFix: true}));
+  const sourceUrl = "app://-/assets/app-primary-83ab2f0c1a5c.js";
+  const reports = [];
+  const cdp = {
+    on() {},
+    async send(method, params) {
+      assert.equal(method, "Runtime.evaluate");
+      const value = await vm.runInNewContext(params.expression, {
+        URL, location: {href: "app://-/index.html"},
+        performance: {getEntriesByType: () => [{name: "blob:already-patched"}]},
+        document: {querySelectorAll: selector => selector === 'script[type="importmap"]'
+          ? [{textContent: "invalid"}, {textContent: JSON.stringify({imports: {[sourceUrl]: "blob:already-patched"}})}]
+          : []},
+        async fetch(url) {
+          assert.equal(url, sourceUrl, "重新注入必须读取映射中的当前版本，不能猜测旧版文件名");
+          return {ok: true, text: async () => latestSource};
+        },
+      });
+      return {result: {value}};
+    },
+  };
+  const bootstrap = await prepareCodexProviderQuotaFix(cdp, preferencesFile, message => reports.push(message));
+  assert.ok(bootstrap.includes(sourceUrl));
+  assert.ok(bootstrap.includes("runtime.setEnabled(true)"));
+  assert.match(reports.at(-1), /prepared/);
+});

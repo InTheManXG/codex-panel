@@ -1,5 +1,7 @@
 # Fork 维护说明
 
+自定义 API 适配重新发现（等待上游吸收）：真实窗口已安装映射但 performance 仅剩 CSS，旧发现逻辑重注入时读取失败并移除适配。`scripts/codex-provider-quota.mjs` 从现有 importmap 的原 URL 识别当前 app-primary 模块；无效映射跳过，仍需源码结构验证，保留官方 provider 及其他发送阻止条件。验证 `test/codex-provider-quota.test.mjs` 的 blob-only 重注入复现、新旧开关与发送边界，以及 `test/injector.test.mjs`；对方 26.928.21956 原脚本匹配和改写语法已通过，本机真实 importmap 只读发现通过，对方最终发送待确认。来源 `git log -S'从已安装的映射找回当前模块' -- scripts/codex-provider-quota.mjs`；上游等价修复后移除。
+
 新聊天整行挂载修复（等待上游吸收）：真实 DOM 的新聊天按钮嵌套在 `.sidebar-item` 横向行，旁边有快速聊天；面板插到整行之后，并覆盖内层按钮的满高/伸缩尺寸为独立行。不复制整行附加操作、不修改原按钮。验证 `test/codex-sidebar-mount.test.mjs` 的原按钮点击保留与 `test/inject-fullheight-regression.test.mjs` 的真实浏览器上下边界、36px 行高及两种布局加载。源文件 `inject/codex-panel.user.js`；来源 `git log -S'const row = reference.parentElement.closest' -- inject/codex-panel.user.js`。上游等价修复后移除。
 
 Free 侧边栏兼容（等待上游吸收）：没有插件、宠物及 destination 行时，在主侧边栏可见且非 inert 的新聊天入口之后挂载；保留原有布局优先顺序，不按套餐判断、不选择正文按钮。参考行没有独立图标时创建自己的 SVG。代码 `inject/codex-panel.user.js`；测试 `test/codex-sidebar-mount.test.mjs`、`test/inject-fullheight-regression.test.mjs` 覆盖两种布局、点击/键盘、重建、图标及真实隔离 Chromium 加载。用户说明：中英文 README、`docs/fork-capabilities.md` 和更新日志。来源定位 `git log -S'Free 账号可能没有' -- inject/codex-panel.user.js`；上游具有等价入口策略后移除。他人 Free 账号真实 DOM 尚未采集，现场效果需安装后确认。

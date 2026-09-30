@@ -97,6 +97,11 @@ export async function prepareCodexProviderQuotaFix(cdp, preferencesFile, report 
       expression: `(async () => {
         const candidates = [...new Set([
           ...performance.getEntriesByType("resource").map(entry => entry.name),
+          // 适配后的模块通过 blob 加载，资源列表可能不再包含原 URL；从已安装的映射找回当前模块。
+          ...[...document.querySelectorAll('script[type="importmap"]')].flatMap(node => {
+            try { return Object.keys(JSON.parse(node.textContent).imports ?? {}); }
+            catch { return []; }
+          }),
           ...[...document.querySelectorAll("script[src],link[rel=modulepreload][href]")].map(node => node.src || node.href),
         ].filter(url => /\\/app-primary-[\\w-]+\\.js$/.test(new URL(url, location.href).pathname)))];
         if (candidates.length === 0) candidates.push(new URL(${JSON.stringify(`/assets/${CODEX_PROVIDER_QUOTA_ASSET}`)}, location.href).href);
