@@ -6,6 +6,12 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Locate Panel entries in the 26.928.20755 sidebar destination container and support native links and role-button rows. Keep keyboard activation and reattach after sidebar replacement; do not misdiagnose every mount failure as a missing main window.
+
+- Exclude detached chat windows from Panel injection and reject unmounted entries instead of reporting injection success. Missing main windows now show an actionable message.
+
+- Rediscover Codex debugging ports after disconnection and show the actual connection failure with the Restart service action instead of an indefinite generic waiting message.
+
 - Adapt the optional custom-provider composer fix to desktop 26.928.20755 while retaining its new session-state and settings-loading blockers.
 
 - Recognize the packaged macOS CLI in ChatGPT desktop 26.928.20755 for executable discovery and launcher signature verification, retaining the OpenAI signing identity check. Add 6.1 Sol, 6 Sol, and 6 Luna project model choices from Codex CLI 0.159.2.

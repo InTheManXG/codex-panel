@@ -1,5 +1,7 @@
 # Codex Panel
 
+Local build 0.4.4-fork adapts the sidebar entry to desktop 26.928.20755. DOM checks cover navigation rows outside the old scroll area and link/role-button entries. Actual signed-in desktop mounting still requires confirmation.
+
 Compatibility target (2026-09-30): ChatGPT desktop **26.928.20755** and standalone Codex CLI **0.159.2**. The macOS launcher recognizes the new packaged CLI layout; project model choices include **6.1 Sol**, **6 Sol**, and **6 Luna**. See [verification scope](docs/codex-compatibility.md) before building or installing.
 
 macOS releases provide a universal DMG for Apple Silicon and Intel, ad-hoc signed without Apple notarization. First launch may require allowing the app in System Settings → Privacy & Security.

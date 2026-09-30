@@ -1,5 +1,11 @@
 # Fork 维护说明
 
+26.928.20755 侧边栏挂载（等待上游吸收）：官方 app-initial-74096abaa6b3.js 的导航使用 `data-slate-sidebar-content`、`data-sidebar-destination`，部分原生行渲染为链接或 role=button 的 div。入口定位优先新版侧边栏目的地，旧滚动区域兼容链接及 role 按钮；克隆后去除 href、aria-labelledby、原生导航 data 标记，非 button 保留 Enter/Space 激活。代码 `inject/codex-panel.user.js`；`test/codex-sidebar-mount.test.mjs` 验证新版滚动区域外的导航项、旧结构、唯一入口、键盘激活和侧边栏重建后的重新挂载；已有 `test/inject.test.mjs` 同步选择器 fixture。错误提示不再将未挂载直接归因为用户没打开主窗口。实际 Codex UI 自动化被工具限制，验证为源码核对、隔离 DOM 与打包检查，现场恢复仍待确认。
+
+分离窗口识别（等待上游吸收）：用户现场日志确认 `detached-window.html?initialRoute=%2Fdetached-window` 无 Panel 入口。injector 按 URL 路径及解析后的 initialRoute 排除此类窗口，避免重载和注入分离聊天；入口未挂载或 source hash 不符时不得返回注入成功；只有主窗口存在时才注入，无主窗口时明确提示打开含项目侧边栏的主窗口。代码 `scripts/codex-injector.mjs`；验证 `test/codex-window-target.test.mjs` 覆盖现场 URL、编码路由、主窗口保留、两条注入路径超时后清理连接。真实登录后挂载仍需现场验证；可选 quota adapter 不可用不等于 CDP 断连。
+
+连接恢复（等待上游吸收）：调试端口中断后，macOS 常驻 injector 重新发现有效 Codex 端口、清理旧连接并更新运行描述；启动等待普通 Codex 退出期间也探测新出现的有效端口。失效候选不阻止后续候选探测。`waitingForCodex.message` 将端口和底层错误码传给启动器，提示实际“重启服务”入口，保留本机回环与原有原点校验。不自动关闭用户 Codex。代码：`scripts/codex-injector.mjs`、`src-tauri/src/main.rs`；针对性验证：`test/codex-reconnect.test.mjs` 和 `test/injector.test.mjs`。用户日志只证明连接请求失败，最初断连原因尚未确认；不得把模拟端口恢复或构建成功描述为用户现场已恢复。上游具备等价发现与错误显示后移除此条目。
+
 ## 2026-09-30 最新版兼容
 
 - 生命周期：等待上游吸收。目的：修复官方 ChatGPT 26.928.20755 将 CLI 移入包目录后，程序发现和启动签名校验仍使用旧路径的问题。

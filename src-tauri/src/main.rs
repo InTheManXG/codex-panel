@@ -137,7 +137,10 @@ struct RendererStatus {
 #[derive(Deserialize)]
 #[serde(tag = "launcherEvent", rename_all = "camelCase")]
 enum LauncherEvent {
-    WaitingForCodex,
+    WaitingForCodex {
+        #[serde(default)]
+        message: Option<String>,
+    },
     ServiceReady,
     OpenSignalReady,
     PanelOpened,
@@ -1944,7 +1947,13 @@ fn watch_launcher_output<R: std::io::Read + Send + 'static>(
                     return;
                 }
                 match event {
-                    LauncherEvent::WaitingForCodex | LauncherEvent::ServiceReady => {
+                    LauncherEvent::WaitingForCodex { message } => {
+                        apply_waiting_for_codex(snapshot);
+                        if let Some(message) = message.filter(|value| !value.trim().is_empty()) {
+                            snapshot.message = message;
+                        }
+                    }
+                    LauncherEvent::ServiceReady => {
                         apply_waiting_for_codex(snapshot);
                     }
                     LauncherEvent::OpenSignalReady => {

@@ -1,5 +1,7 @@
 # Codex Panel
 
+本地构建 0.4.4-fork 适配桌面版 26.928.20755 的侧边栏入口；隔离 DOM 验证覆盖旧滚动区之外的导航项、链接和 role 按钮。已登录客户端内的实际挂载仍待现场确认。
+
 适配目标（2026-09-30）：ChatGPT 桌面版 **26.928.20755** 和独立 Codex CLI **0.159.2**。macOS 启动器识别新版内置 CLI 目录；项目模型选项新增 **6.1 Sol**、**6 Sol** 和 **6 Luna**。构建或安装前请查看[验证范围](docs/codex-compatibility.md)。
 
 macOS Release 提供 Apple Silicon 与 Intel 通用 DMG，使用临时签名（ad-hoc），未经 Apple 公证。首次打开可能需要在“系统设置 → 隐私与安全性”中允许打开。
