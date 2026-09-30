@@ -46,9 +46,16 @@ const currentSource = source
     'const submissionState = {submitDisabled:cn,}; submissionState.submitDisabled ||= uploading || !text.trim();')
   + '\nfunction providerQuota(e,t,n=\x60fresh\x60){let{cwd:r,hostId:i}=e.get(Yp,t);if(i!==\x60local\x60)return null;let{data:a}=e.get(dT,{cwd:r,hostId:i});return a==null||(e.get(Rw,t)??a.model_provider??\x60openai\x60)!==\x60openai\x60?null:quotaStatus(e,n)}';
 const renamed = {h7: "composer$9", g7: "react$9", Yp: "target$9", Rw: "provider$9", dT: "config$9", Me: "store$9", Qe: "thread$9", et: "host$9", cn: "disabled$9", nt: "quota$9", Rt: "workQuota$9", ye: "external$9", $e: "pending$9", ot: "policy$9"};
+// 26.928.20755 also gates submission on pending sessions and service-tier loading.
+const latestSource = currentSource.replace('const cn=ye||$e||ot||nt||Rt;', `
+  const sessionPending = e.sessionPending, isNewSession = e.isNewSession;
+  const threadUnavailable = e.threadUnavailable, settings = e.settings;
+  const cn=ye||$e||sessionPending&&isNewSession||threadUnavailable||ot||settings?.isLoading===!0||nt||Rt;
+`);
 const builds = [
   {asset: CODEX_PROVIDER_QUOTA_ASSET, composer: "m7", react: "h7", source},
   {asset: "app-primary-d66705000d76.js", composer: "h7", react: "g7", source: currentSource},
+  {asset: "app-primary-92c16ff2fe4e.js", composer: "h7", react: "g7", source: latestSource, sessionChecks: true},
   {asset: "app-primary-renamed.js", composer: renamed.h7, react: renamed.g7,
     source: currentSource.replace(/[A-Za-z_$][\w$]*/g, name => renamed[name] ?? name)},
 ];
@@ -67,6 +74,15 @@ for (const build of builds) {
     assert.equal(patched({threadProvider: "custom"}).submit(), "hello");
     assert.equal(patched({configProvider: "custom"}).submitDisabled, false);
     if (build.asset !== CODEX_PROVIDER_QUOTA_ASSET) assert.equal(patched({threadProvider: "custom", policy: true}).submit(), false);
+    if (build.sessionChecks) {
+      for (const blockers of [
+        {sessionPending: true, isNewSession: true},
+        {threadUnavailable: true},
+        {settings: {isLoading: true}},
+      ]) assert.equal(patched({threadProvider: "custom", ...blockers}).submit(), false);
+      assert.equal(patched({threadProvider: "custom", sessionPending: true, isNewSession: false}).submit(), "hello");
+      assert.equal(patched({threadProvider: "custom", settings: {isLoading: false}}).submit(), "hello");
+    }
     runtime.setEnabled(false);
     assert.equal(patched({threadProvider: "custom"}).submit(), false);
     runtime.setEnabled(true);

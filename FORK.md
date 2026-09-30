@@ -1,5 +1,14 @@
 # Fork 维护说明
 
+## 2026-09-30 最新版兼容
+
+- 生命周期：等待上游吸收。目的：修复官方 ChatGPT 26.928.20755 将 CLI 移入包目录后，程序发现和启动签名校验仍使用旧路径的问题。
+- 不变量：macOS 优先使用 `Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`，旧布局仍使用 `Contents/Resources/codex`；启动器继续校验官方应用和实际二进制的签名、`Identifier=codex`、`TeamIdentifier=2DC432GLL2`，不改用未签名 shell 包装脚本，不修改官方应用。代码：`shared/codex-executable.mjs`、`src-tauri/src/main.rs`。
+- 项目模型选择与请求校验共用 `shared/panel-automation-options.mjs`，类型同步于 `.d.mts`；新增 `gpt-6.1-sol`、`gpt-6-sol`、`gpt-6-luna`，推理强度与默认值取自官方 CLI 0.159.2 的实际 `model/list`。保留已保存模型及自动化默认设置。同步现有目录断言：`test/panel-automation.test.mjs`。
+- 来源基线：`shay-wong/codex-panel` 的 `9628e79`；提交后可用 `git log -S'codex-cli' -- shared/codex-executable.mjs` 定位。合并时保留真实二进制的签名校验；上游提供等价目录支持与模型选项后移除此差异。
+- 用户入口：中英文 README；验证范围和限制：`docs/codex-compatibility.md`；索引：`docs/fork-capabilities.md`；发布记录：中英文 CHANGELOG。按本文件维护契约手工维护，当前环境未提供 fork-doc 技能。
+- 新版 composer 的提交门增加会话状态及 `isLoading` 条件；`scripts/codex-provider-quota.mjs` 识别扩展表达式但完整保留所有非额度条件。`test/codex-provider-quota.test.mjs` 的新版 fixture 验证加载中、会话不可用、待建会话和安全策略仍禁止提交；实际 `app-primary-92c16ff2fe4e.js` 改写后通过语法检查。沿用原有默认关闭、自定义本地 provider 限定及未知结构不改写约定；真实登录后发送尚未验证。
+
 
 继续规划导航确认（本次修复）：公共会话识别优先读取 `activeThreadRow` 的实际激活 ID，再回退 URL；不能使用导航前写入的 `lastNativeThreadId` 当作打开成功证据。此契约同时适用于预填前检查和发送后的绑定确认。代码 `inject/codex-panel.user.js`；验证 `node --test test/inject.test.mjs`，覆盖 URL 不变但正确会话已激活，以及其他会话激活时禁止预填；定位 `git log -S'Native in-app navigation' -- inject/codex-panel.user.js`。
 本文档是 `shay-wong/codex-panel` 面向维护者和 AI 编码代理的活跃差异台账，只记录相对于 `chuspeeism/dashi-taskboard` 有意保留的行为差异。

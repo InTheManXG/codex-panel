@@ -6,6 +6,10 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Adapt the optional custom-provider composer fix to desktop 26.928.20755 while retaining its new session-state and settings-loading blockers.
+
+- Recognize the packaged macOS CLI in ChatGPT desktop 26.928.20755 for executable discovery and launcher signature verification, retaining the OpenAI signing identity check. Add 6.1 Sol, 6 Sol, and 6 Luna project model choices from Codex CLI 0.159.2.
+
 - Fixed custom-provider sending after updating to ChatGPT desktop 26.917.71314. The adapter now discovers and matches the composer by code structure, tolerates asset hash and minified symbol changes, and retains 26.917.51856 compatibility.
 
 - Adopted the upstream native macOS update confirmation dialog, keeping Fork release and signature validation while bringing the confirmation window to the front; other platforms retain the existing Tauri dialog.
