@@ -27,8 +27,12 @@ The project model menu and host validation include `gpt-6.1-sol`, `gpt-6-sol`, a
 - A browser preview with isolated Panel data loaded successfully. The project automation menu displayed all three new models and saved a selection of 6.1 Sol while automatic execution remained disabled.
 - Composer/injector checks: 30 passed, including the latest gate's loading/session conditions and live switch changes. The filesystem-watch check required running outside the sandbox after sandboxed `fs.watch` returned `EMFILE`.
 
+## CI verification
+
+GitHub Actions [Check run 36660877729](https://github.com/InTheManXG/codex-panel/actions/runs/36660877729), dispatched for code commit `5aaf896b04398fd52f4cc7d21044ccb0ef4ad54d`, completed successfully: the complete code check, macOS universal native build, packaged CLI/listener verification, ad-hoc signing and bundle verification, Windows tests and unsigned NSIS installer build, and Ubuntu package build/content verification all passed. This supplements the local checks above; the local machine itself still lacks Rust and Xcode command-line tools. The subsequent verification-record commit changes documentation only.
+
 ## Remaining validation
 
-This machine has no Rust toolchain or Xcode command-line tools, so the native launcher was not compiled or packaged. The frontend launcher build is not a native build. No signed-in desktop injection or real model submission was performed, and Windows/Linux were not exercised. These steps remain necessary before claiming a fully verified desktop release. No installed app, production Panel data, login credentials, or existing conversations were modified.
+No signed-in desktop injection or real model submission was performed. Windows/Linux desktop interaction was not exercised. These steps remain necessary before claiming a fully verified desktop release. No installed app, production Panel data, login credentials, or existing conversations were modified. CI verification is not a published or notarized release.
 
 To build the macOS launcher on a machine with the required toolchain, install Node.js 22.5+, Xcode command-line tools, and Rust, then follow the repository's `npm ci` and `npm run app:build:local` instructions. Install only after reviewing the resulting build.
