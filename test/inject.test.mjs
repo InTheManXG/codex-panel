@@ -244,7 +244,7 @@ test("entry clones the native Plugins row and the page covers the complete Codex
   assert.match(source, /button\.getAttribute\(OWNED_ATTRIBUTE\) !== "true"/);
   assert.match(source, /rect\.bottom <= sectionTop/);
   assert.match(source, /const button = reference\.cloneNode\(true\)/);
-  assert.match(source, /reference\.after\(entry\)/);
+  assert.match(source, /row\.after\(entry\)/);
   assert.match(source, /viewport\.querySelector\("\.app-shell-main-content-frame"\)/);
   assert.match(source, /const surface = viewport\?\.parentElement/);
   assert.match(source, /surface\.appendChild\(page\)/);

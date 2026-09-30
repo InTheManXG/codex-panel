@@ -134,7 +134,7 @@ The wait duration is fixed. If no main renderer appears within 30 seconds, the l
 
 ## Switch between Panel and native Codex destinations
 
-Panel sidebar mounting also supports Free-account layouts without Plugins or pets. If the existing navigation anchors are absent, Panel uses the visible New chat row inside the main sidebar, with its own icon and keyboard activation.
+Panel sidebar mounting also supports Free-account layouts without Plugins or pets. If the existing navigation anchors are absent, Panel uses the visible New chat row inside the main sidebar, with its own icon and keyboard activation. Nested New chat and Quick chat controls remain in their original row; Panel occupies a separate row below it.
 
 The Panel sidebar entry opens from conversations as well as native pages such as Plugins and Sites. Panel remembers every selected project, including **All projects**, and restores it the next time the sidebar entry opens without a `project` query parameter. An explicit `project` query parameter still takes priority. No configuration or migration is required.
 

@@ -1,5 +1,7 @@
 # Fork 维护说明
 
+新聊天整行挂载修复（等待上游吸收）：真实 DOM 的新聊天按钮嵌套在 `.sidebar-item` 横向行，旁边有快速聊天；面板插到整行之后，并覆盖内层按钮的满高/伸缩尺寸为独立行。不复制整行附加操作、不修改原按钮。验证 `test/codex-sidebar-mount.test.mjs` 的原按钮点击保留与 `test/inject-fullheight-regression.test.mjs` 的真实浏览器上下边界、36px 行高及两种布局加载。源文件 `inject/codex-panel.user.js`；来源 `git log -S'const row = reference.parentElement.closest' -- inject/codex-panel.user.js`。上游等价修复后移除。
+
 Free 侧边栏兼容（等待上游吸收）：没有插件、宠物及 destination 行时，在主侧边栏可见且非 inert 的新聊天入口之后挂载；保留原有布局优先顺序，不按套餐判断、不选择正文按钮。参考行没有独立图标时创建自己的 SVG。代码 `inject/codex-panel.user.js`；测试 `test/codex-sidebar-mount.test.mjs`、`test/inject-fullheight-regression.test.mjs` 覆盖两种布局、点击/键盘、重建、图标及真实隔离 Chromium 加载。用户说明：中英文 README、`docs/fork-capabilities.md` 和更新日志。来源定位 `git log -S'Free 账号可能没有' -- inject/codex-panel.user.js`；上游具有等价入口策略后移除。他人 Free 账号真实 DOM 尚未采集，现场效果需安装后确认。
 
 本次整合 `codex/latest-codex-compat` 至 `310cec5`，保留其新版 CLI、发送适配、侧边栏挂载和断线重连；同时保留 `57a4ae5` 的 Data Router / 可见工作区修复及 `0ed6707` 的面板图标替换。内部兼容行为沿用各条目契约，合并验证包含相关 Node 测试、隔离 Chromium 挂载及通用安装包校验。

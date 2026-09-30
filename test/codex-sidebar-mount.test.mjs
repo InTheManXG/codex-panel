@@ -91,3 +91,28 @@ test("Free fallback ignores chat-area controls and hidden or inert sidebar rows"
     assert.equal(f.dom.window.document.getElementById('codex-panel-entry'), null);
   } finally { f.dom.window.close(); }
 });
+
+
+test("nested New chat row keeps original actions and mounts Panel as a separate row", () => {
+  const f = fixture('<aside><div id="new-row" class="sidebar-item"><button class="sidebar-item"><span class="icon-leading-slot"><svg></svg></span><span class="text-fade-truncate">新聊天</span></button><button aria-label="快速聊天">+</button></div><div data-app-action-sidebar-scroll></div></aside>');
+  try {
+    const doc = f.dom.window.document;
+    const row = doc.getElementById('new-row');
+    const original = row.outerHTML;
+    let newChats = 0;
+    row.querySelector('button').addEventListener('click', () => newChats++);
+    f.api.ensureEntry();
+    f.api.ensureEntry();
+    const entry = doc.getElementById('codex-panel-entry');
+    assert.equal(row.outerHTML, original);
+    assert.equal(entry.previousElementSibling, row);
+    assert.equal(entry.parentElement, row.parentElement);
+    assert.equal(entry.style.width, '100%');
+    assert.equal(entry.querySelectorAll('button').length, 0);
+    entry.click();
+    assert.equal(f.opened, 1);
+    assert.equal(newChats, 0);
+    row.querySelector('button').click();
+    assert.equal(newChats, 1);
+  } finally { f.dom.window.close(); }
+});

@@ -1,6 +1,6 @@
 # Codex Panel
 
-Panel also supports sidebars without Plugins or pets, including Free accounts, by placing its entry after New chat when needed.
+Panel also supports sidebars without Plugins or pets, including Free accounts, by placing its entry after New chat when needed. Panel appears on its own row below the complete New chat row, preserving New chat and Quick chat.
 
 Local build 0.4.4-fork adapts the sidebar entry to desktop 26.928.20755. DOM checks cover navigation rows outside the old scroll area and link/role-button entries. Actual signed-in desktop mounting still requires confirmation.
 

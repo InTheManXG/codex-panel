@@ -443,9 +443,14 @@
     installStyles();
     const reference = findReferenceButton();
     if (!reference?.parentElement) return;
+    // 新聊天按钮可能只是横向行的一部分；在整行之后挂载，不能挤入快速聊天所在的行内。
+    const row = reference.parentElement.closest(".sidebar-item") || reference;
     if (!entry) entry = createEntry(reference);
-    if (entry.parentElement !== reference.parentElement || entry.previousElementSibling !== reference) {
-      reference.after(entry);
+    entry.style.height = row !== reference ? "var(--nav-item-height, var(--height-token-row, 36px))" : "";
+    entry.style.flex = row !== reference ? "none" : "";
+    entry.style.width = row !== reference ? "100%" : "";
+    if (entry.parentElement !== row.parentElement || entry.previousElementSibling !== row) {
+      row.after(entry);
     }
     syncEntryState();
   }

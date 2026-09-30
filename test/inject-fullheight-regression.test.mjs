@@ -68,7 +68,7 @@ function fixtureHtml(origin, freeSidebar) {
   <body>
     <aside>
       <nav role="navigation">
-        ${freeSidebar ? '<button><svg></svg><span class="text-fade-truncate">新聊天</span></button>' : ''}
+        ${freeSidebar ? '<div id="new-chat-row" class="sidebar-item" style="display:flex;height:36px;width:200px"><button class="sidebar-item" style="display:flex;height:100%;flex:1;min-width:0"><svg width="20" height="20"></svg><span class="text-fade-truncate">新聊天</span></button><button aria-label="快速聊天">+</button></div>' : ''}
         <div data-app-action-sidebar-scroll>
           ${freeSidebar ? '' : `<div>
             <button><span>首页</span></button>
@@ -318,6 +318,20 @@ test(`Panel loads from ${freeSidebar ? "Free" : "Plugins"} sidebar, fills worksp
     await session.send("Page.navigate", { url });
     await loaded;
 
+    if (freeSidebar) {
+      const layout = await session.send("Runtime.evaluate", {
+        expression: `(() => {
+          const row = document.getElementById("new-chat-row");
+          const entry = document.getElementById("codex-panel-entry");
+          return { separate: entry?.parentElement === row.parentElement,
+            below: entry?.getBoundingClientRect().top >= row.getBoundingClientRect().bottom,
+            height: entry?.getBoundingClientRect().height, newChat: row.textContent.includes("新聊天"),
+            quickChat: !!row.querySelector('[aria-label="快速聊天"]') };
+        })()`,
+        returnByValue: true,
+      });
+      assert.deepEqual(layout.result.value, { separate: true, below: true, height: 36, newChat: true, quickChat: true });
+    }
     const deadline = Date.now() + 20_000;
     while (!encodedResult && Date.now() < deadline) {
       const evaluation = await session.send("Runtime.evaluate", {
