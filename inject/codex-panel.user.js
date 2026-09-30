@@ -345,8 +345,16 @@
   }
 
   function replaceEntryIcon(button) {
-    const icon = button.querySelector("svg");
+    const slot = button.querySelector(".icon-leading-slot");
+    let icon = button.querySelector("svg");
+    // 参考行可能使用宠物头像而非 SVG；清空整个图标槽，避免继承头像与动画。
+    if (slot) {
+      icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("class", "icon-leading");
+      slot.replaceChildren(icon);
+    }
     if (!icon) return;
+    icon.setAttribute("aria-hidden", "true");
     icon.setAttribute("viewBox", "0 0 24 24");
     icon.setAttribute("fill", "none");
     icon.setAttribute("stroke", "currentColor");

@@ -26,6 +26,11 @@
 
 模型目录读取（本次修复，等待上游吸收）：Jira 显式绑定、规划/重新规划登记、聊天创建/设置/发送的共享模型目录必须使用 Codex `model/list` 分页元数据并耗尽 `nextCursor`，不得恢复 `debug models` 的完整提示词导出或仅调大缓冲区。工作流仍只查询 Skills，本地 Skill 符号链接补齐保持不变。代码 `server/ai-chat-catalog.mjs`、`server/codex-app-server.mjs`；本地查询在目标仓库目录运行并在读取后关闭子进程。验证 `node --test test/jira-planning.test.mjs test/ai-chat-runner.test.mjs test/ai-chat-server.test.mjs test/claim-queue.test.mjs test/jira-lifecycle.test.mjs test/workflow-settings.test.mjs`，包括 3 MiB debug 导出场景下 CLI 绑定、Spec 保存、重新规划和分页元数据字段保留。用户入口：中英文 README，详细说明 `docs/fork-capabilities.md#link-jira-requirements-to-repository-issues`；来源定位 `git log -S'async function listModels(appServer)' -- server/ai-chat-catalog.mjs`。合并时保留统一目录路径，上游具备等价实现与验证后移除。
 
+### 任务面板入口图标
+
+- 生命周期：`等待上游吸收`；内部兼容性修复。侧边栏参考行可能是宠物头像，复制样式后清空 `.icon-leading-slot` 并创建面板 SVG，不继承头像、动画或图片；旧版 SVG 参考行保持替换能力。
+- 代码：`inject/codex-panel.user.js`；验证：`node --test test/inject.test.mjs` 覆盖宠物替换、重复执行及文字保留，并核对实际窗口图标。来源：`git log -S'slot.replaceChildren(icon)' -- inject/codex-panel.user.js`。上游具有等价图标槽替换后移除。
+
 ### 新版 Codex 导航兼容
 
 - 生命周期：`等待上游吸收`；分类：内部兼容性修复，保持既有任务面板入口与原生返回行为。

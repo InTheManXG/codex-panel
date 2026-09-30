@@ -1904,3 +1904,26 @@ test("Panel follows Data Router navigation without navigator.location and unsubs
   api.detach();
   assert.equal(listeners.size, 0);
 });
+
+
+test("Panel replaces a cloned pet avatar with its own board icon", async () => {
+  const { JSDOM } = await import("jsdom");
+  const dom = new JSDOM('<button><span class="icon-leading-slot"><div data-codex-pet-id="pet" style="background-image:url(pet.png)"></div></span><span>任务面板</span></button>');
+  try {
+    const { document } = dom.window;
+    const start = source.indexOf("  function replaceEntryIcon(");
+    const end = source.indexOf("  function createEntry(", start);
+    const replaceIcon = vm.runInNewContext(`(${source.slice(start, end).trim()})`, { document });
+    const button = document.querySelector("button");
+    replaceIcon(button);
+    assert.equal(button.querySelector("[data-codex-pet-id]"), null);
+    assert.equal(button.querySelector("svg").namespaceURI, "http://www.w3.org/2000/svg");
+    assert.equal(button.querySelector("svg").getAttribute("aria-hidden"), "true");
+    assert.equal(button.querySelectorAll("svg rect, svg path").length, 2);
+    replaceIcon(button);
+    assert.equal(button.querySelectorAll("svg").length, 1);
+    assert.equal(button.textContent.trim(), "任务面板");
+  } finally {
+    dom.window.close();
+  }
+});
