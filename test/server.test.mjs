@@ -1703,6 +1703,30 @@ test("Codex-hosted user mutations persist the current account identity and avata
   assert.equal(comment.authorAvatarUrl, "https://example.com/test-user.png");
 });
 
+test("Codex-hosted user mutations accept bounded WebP data avatars", async () => {
+  const baseUrl = await startServer();
+  const userHeaders = {
+    "x-panel-user-id": "webp-user",
+    "x-panel-user-name": "WebP%20User",
+    "x-panel-user-avatar": "data:image/webp;base64,UklGRg==",
+  };
+  const result = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    headers: userHeaders,
+    body: { title: "WebP avatar" },
+  });
+  assert.equal(result.response.status, 201);
+  assert.equal(result.body.task.creatorAvatarUrl, userHeaders["x-panel-user-avatar"]);
+  for (const avatar of ["data:image/svg+xml;base64,PHN2Zz4=", "javascript:alert(1)", `data:image/webp;base64,${"A".repeat(2048)}`]) {
+    const invalid = await request(baseUrl, "/api/tasks", {
+      method: "POST",
+      headers: { ...userHeaders, "x-panel-user-avatar": avatar },
+      body: { title: "Invalid avatar" },
+    });
+    assert.equal(invalid.response.status, 400);
+  }
+});
+
 test("issue attachments can be uploaded, listed, opened, downloaded, and deleted", async () => {
   const baseUrl = await startServer();
   const createTaskResult = await request(baseUrl, "/api/tasks", {

@@ -2638,19 +2638,31 @@ async function resolveRunnableCodexExecutable(appPath) {
     return executable;
   }
 
-  const source = await stat(executable);
+  const sourceDirectory = path.dirname(executable);
   const cacheDirectory = path.join(panelDataDirectory, "codex-runtime");
   const cachedExecutable = path.join(cacheDirectory, "codex.exe");
-  try {
-    const cached = await stat(cachedExecutable);
-    if (cached.size === source.size && cached.mtimeMs === source.mtimeMs) {
-      return cachedExecutable;
-    }
-  } catch {}
-
   await mkdir(cacheDirectory, { recursive: true });
-  await pipeline(createReadStream(executable), createWriteStream(cachedExecutable));
-  await utimes(cachedExecutable, source.atime, source.mtime);
+  for (const filename of [
+    "codex.exe",
+    "codex-code-mode-host.exe",
+    "codex-command-runner.exe",
+    "codex-windows-sandbox-setup.exe",
+  ]) {
+    const sourcePath = path.join(sourceDirectory, filename);
+    const cachedPath = path.join(cacheDirectory, filename);
+    const source = await stat(sourcePath);
+    try {
+      const cached = await stat(cachedPath);
+      if (cached.size === source.size && cached.mtimeMs === source.mtimeMs) {
+        continue;
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+
+    await pipeline(createReadStream(sourcePath), createWriteStream(cachedPath));
+    await utimes(cachedPath, source.atime, source.mtime);
+  }
   return cachedExecutable;
 }
 

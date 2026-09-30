@@ -132,9 +132,11 @@ The wait duration is fixed. If no main renderer appears within 30 seconds, the l
 
 ## Switch between Panel and native Codex destinations
 
-The Panel sidebar entry opens from conversations as well as native pages such as Plugins and Sites. Panel remembers every selected project, including **All projects**, and restores it the next time the sidebar entry opens without a `project` query parameter. An explicit `project` query parameter still takes priority. No configuration or migration is required.
+The Panel entry appears before Explore in the current Codex navigation rail and retains the sidebar entry on older layouts. It opens from conversations as well as native pages such as Plugins and Sites. Panel remembers every selected project, including **All projects**, and restores it the next time the sidebar entry opens without a `project` query parameter. An explicit `project` query parameter still takes priority. No configuration or migration is required.
 
-This fix accepts a main content frame that covers most of the Codex viewport even when that frame also includes the native titlebar region.
+Panel fills the workspace beside the navigation rail and below the native titlebar. The native drag region stays available; task-specific header content and the previous selection are hidden while Panel is open and restored when leaving. Compact account menus supply the user name and a bounded WebP avatar for issue activity.
+
+Notifications share a stack with Undo actions. Hover or keyboard focus expands the stack and pauses dismissal; swipe a notification to dismiss it. Tasks already in Todo omit the redundant comment status switch. Windows Store installations cache Codex’s companion executables alongside the CLI so code mode and command execution can start.
 
 Panel participates in Codex’s native navigation history: Back returns to the page before Panel, Forward reopens Panel, and navigating from Panel to a native destination adds that destination to the same history. Route changes control visibility without matching button or command labels; utility actions that do not navigate leave Panel open. The bridge uses the existing MemoryRouter found through React ancestor props, so Codex updates that change this structure require a compatibility check. It leaves the router’s React listener intact and restores the original navigation methods when unloaded. History is local to the current Codex renderer; reloading does not persist Panel entries.
 

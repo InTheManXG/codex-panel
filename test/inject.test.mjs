@@ -238,17 +238,17 @@ test("embedded page supports ordinary loopback and authenticated opaque modes", 
   assert.doesNotMatch(source, /allow-same-origin/);
 });
 
-test("entry clones the native Plugins row and the page covers the complete Codex workspace", () => {
-  assert.match(source, /const PLUGIN_LABELS = \["插件", "外掛程式", "plugins", "プラグイン"\]/);
-  assert.match(source, /if \(plugin\) return plugin;/);
+test("entry clones the native Explore rail button and the page covers the complete Codex workspace", () => {
+  assert.match(source, /const EXPLORE_LABELS = \["探索", "explore"\]/);
+  assert.match(source, /document\.querySelector\("nav\[data-app-navigation-rail\]"\)/);
   assert.match(source, /button\.getAttribute\(OWNED_ATTRIBUTE\) !== "true"/);
-  assert.match(source, /rect\.bottom <= sectionTop/);
+
   assert.match(source, /const button = reference\.cloneNode\(true\)/);
-  assert.match(source, /reference\.after\(entry\)/);
+  assert.match(source, /reference\.before\(entry\)/);
   assert.match(source, /document\.querySelector\("\.app-shell-main-content-frame"\)/);
-  assert.match(source, /const surface = viewport\?\.parentElement/);
+  assert.match(source, /const workspace = viewport\?\.closest\("\[data-app-shell-workspace-row\]"\)/);
   assert.match(source, /surface\.appendChild\(page\)/);
-  assert.match(source, /#\$\{PAGE_ID\} \{[\s\S]*?top: 0;/);
+  assert.match(source, /#\$\{PAGE_ID\} \{[\s\S]*?top: var\(--app-shell-titlebar-height, 0px\);/);
   assert.doesNotMatch(source, /--codex-panel-top-offset/);
   assert.match(source, /child\.setAttribute\(HIDDEN_ATTRIBUTE, "true"\)/);
   assert.match(source, /page\.hidden = false/);
@@ -257,35 +257,7 @@ test("entry clones the native Plugins row and the page covers the complete Codex
   assert.doesNotMatch(source, /aria-modal/);
 });
 
-test("conversation content frames can host Panel when they include the native header", () => {
-  const findPageHostSource = source.slice(
-    source.indexOf("function findPageHost"),
-    source.indexOf("function findPageMount"),
-  );
-  const conversationFrame = {
-    kind: "conversation-frame",
-    getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
-  };
-  const viewport = {
-    children: [conversationFrame],
-    getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
-  };
-  const nativeHeader = {
-    getBoundingClientRect: () => ({ bottom: 48 }),
-  };
-  const document = {
-    querySelector: (selector) => {
-      if (selector === "[data-app-shell-main-content-layout]") return viewport;
-      if (selector === "main > header") return nativeHeader;
-      return null;
-    },
-  };
-  const findPageHost = vm.runInNewContext(`(${findPageHostSource})`, { document });
-
-  assert.equal(findPageHost().kind, "conversation-frame");
-});
-
-test("entry recognizes known Plugins labels and structurally anchors an unenumerated locale", () => {
+test("entry recognizes the Explore rail labels", () => {
   const normalizedLabelSource = source.slice(
     source.indexOf("function normalizedLabel"),
     source.indexOf("\n\n  function normalizeThreadId"),
@@ -295,62 +267,44 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
     source.indexOf("\n\n  function replaceEntryIcon"),
   );
   let currentButtons;
-  let currentSection;
-  const scroll = {
-    querySelector: (selector) => selector === "[data-app-action-sidebar-section]" ? currentSection : null,
+  const rail = {
     querySelectorAll: (selector) => selector === "button" ? currentButtons : [],
   };
   const findReferenceButton = vm.runInNewContext(`(() => {
-    const PLUGIN_LABELS = ["插件", "外掛程式", "plugins", "プラグイン"];
+    const EXPLORE_LABELS = ["探索", "explore"];
     const OWNED_ATTRIBUTE = "data-codex-panel-owned";
     ${normalizedLabelSource}
     ${referenceSource}
     return findReferenceButton;
   })()`, {
-    document: { querySelector: () => scroll },
+    document: { querySelector: () => rail },
   });
 
-  for (const textContent of ["插件", "外掛程式", "プラグイン", "Plugins"]) {
+  for (const textContent of ["探索", "Explore"]) {
     const currentButton = {
-      textContent,
+      querySelector: (selector) => selector === ".sr-only" ? { textContent } : null,
       getAttribute: () => null,
       parentElement: {},
     };
     currentButtons = [currentButton];
-    currentSection = null;
     assert.equal(findReferenceButton(), currentButton);
   }
 
-  const topButton = (textContent, top, owned = false) => ({
-    textContent,
-    getAttribute: (name) => name === "data-codex-panel-owned" && owned ? "true" : null,
-    getBoundingClientRect: () => ({ top, bottom: top + 30, height: 30 }),
-    parentElement: {},
-  });
-  const unenumeratedPlugin = topButton("Приклучоци", 160);
-  currentButtons = [
-    topButton("Барања за повлекување", 100),
-    topButton("Локации", 120),
-    topButton("Закажано", 140),
-    unenumeratedPlugin,
-    topButton("Panel", 180, true),
-  ];
-  currentSection = { getBoundingClientRect: () => ({ top: 200 }) };
-  assert.equal(findReferenceButton(), unenumeratedPlugin);
+
 });
 
-test("opening Panel suppresses native selection and contextual header until close", () => {
-  assert.match(source, /aside nav\[role="navigation"\] \[aria-current\]/);
-  assert.match(source, /node\.removeAttribute\("aria-current"\)/);
-  assert.match(source, /NATIVE_SELECTED_ATTRIBUTE/);
-  assert.match(source, /app-shell-header-context-menu-surface/);
-  assert.match(source, /restoreNativeSelection\(\)/);
-  assert.match(source, /function syncNativeNavigation[\s\S]*closePanel\(false\)/);
+test("opening Panel preserves native selection and the titlebar", () => {
+  assert.doesNotMatch(source, /mutedNativeSelections|hideNativeHeader/);
+  assert.doesNotMatch(source, /node\.removeAttribute\("aria-current"\)/);
+  assert.match(source, /syncNativeRailIcons\(\)/);
+  assert.match(source, /restoreNativeRailIcons\(\)/);
+  assert.match(source, /destination\?\.getAttribute\("aria-current"\) !== "page"/);
+  assert.match(source, /function onDocumentClick[\s\S]*event\.stopPropagation\(\)[\s\S]*leavePanel\(\);/);
 });
 
-test("the embedded header fills the native titlebar without clipping or a full-page no-drag region", () => {
-  assert.match(source, /top: 0;/);
-  assert.match(source, /z-index: 31 !important/);
+test("the embedded page sits below the native titlebar without a full-page no-drag region", () => {
+  assert.match(source, /top: var\(--app-shell-titlebar-height, 0px\);/);
+  assert.doesNotMatch(source, /z-index: 31 !important/);
   assert.doesNotMatch(source, /headerRightInset/);
   assert.doesNotMatch(source, /NATIVE_HEADER_RIGHT_INSET/);
   assert.doesNotMatch(source, /clip-path: polygon/);
@@ -431,14 +385,7 @@ test("the injected iframe can be cache-busted without reloading the Codex shell"
   assert.match(source, /reloadFrame,/);
 });
 
-test("private Panel uses CDP while ordinary Panel retains loopback permission", () => {
-  assert.match(source, /requestHostLoadFrame\(frameRequest\)/);
-  assert.match(source, /if \(usesPrivateFrame\(\)\) await requestHostLoadFrame\(frameRequest\)/);
-  assert.match(source, /local-network-access; loopback-network; local-network/);
-  assert.match(source, /if \(!usesPrivateFrame\(\)\)[\s\S]*?panel:frame-awaiting-challenge[\s\S]*?postFrameChallenge\(\)/);
-});
-
-test("reopening reuses a ready cache-busted iframe without showing the startup placeholder", () => {
+test("reopening captures the current identity before showing a reused cache-busted iframe", () => {
   assert.match(source, /function frameMatchesPanelUrl\(panelUrl\)/);
   assert.match(source, /loadedUrl\.searchParams\.delete\(FRAME_REFRESH_PARAM\)/);
   assert.match(source, /expectedUrl\.searchParams\.delete\(FRAME_REFRESH_PARAM\)/);
@@ -446,13 +393,12 @@ test("reopening reuses a ready cache-busted iframe without showing the startup p
     source.indexOf("async function preparePanel"),
     source.indexOf("function restoreNativeContent"),
   );
-  assert.match(prepareSource, /const canReuseFrame = Boolean\([\s\S]*frameMatchesPanelUrl\(panelUrl\)/);
-  assert.match(prepareSource, /if \(canReuseFrame\) showFrame\(\);\s*else showLoading\(\);/);
+  assert.match(prepareSource, /showLoading\(\);[\s\S]*captureHostContext\(\)/);
+  assert.match(prepareSource, /currentCodexUser = context\?\.user \?\? null;[\s\S]*showFrame\(\);/);
   assert.match(
     prepareSource,
     /if \(!frameReady \|\| result\.restarted \|\| !frameMatchesPanelUrl\(panelUrl\)\) \{\s*showLoading\(\);/,
   );
-  assert.doesNotMatch(prepareSource, /async function preparePanel\(generation\) \{\s*showLoading\(\);/);
 });
 
 test("iframe messages require both the exact origin and source window", () => {
@@ -1852,4 +1798,96 @@ test("Panel participates in the native memory router and restores its original m
     globalThis.window = previousWindow;
     dom.window.close();
   }
+});
+
+test("conversation content frames can host Panel when they include the native header", () => {
+  const findPageHostSource = source.slice(
+    source.indexOf("function findPageHost"),
+    source.indexOf("function findPageMount"),
+  );
+  const conversationFrame = {
+    kind: "conversation-frame",
+    getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
+  };
+  const viewport = {
+    children: [conversationFrame],
+    getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
+  };
+  const nativeHeader = {
+    getBoundingClientRect: () => ({ bottom: 48 }),
+  };
+  const document = {
+    querySelector: (selector) => {
+      if (selector === "[data-app-shell-main-content-layout]") return viewport;
+      if (selector === "main > header") return nativeHeader;
+      return null;
+    },
+  };
+  const findPageHost = vm.runInNewContext(`(${findPageHostSource})`, { document });
+
+  assert.equal(findPageHost().kind, "conversation-frame");
+});
+
+
+test("private Panel uses CDP while ordinary Panel retains loopback permission", () => {
+  assert.match(source, /requestHostLoadFrame\(frameRequest\)/);
+  assert.match(source, /if \(usesPrivateFrame\(\)\) await requestHostLoadFrame\(frameRequest\)/);
+  assert.match(source, /local-network-access; loopback-network; local-network/);
+  assert.match(source, /if \(!usesPrivateFrame\(\)\)[\s\S]*?panel:frame-awaiting-challenge[\s\S]*?postFrameChallenge\(\)/);
+});
+
+
+test("entry recognizes known Plugins labels and structurally anchors an unenumerated locale", () => {
+  const normalizedLabelSource = source.slice(
+    source.indexOf("function normalizedLabel"),
+    source.indexOf("\n\n  function normalizeThreadId"),
+  );
+  const referenceSource = source.slice(
+    source.indexOf("function buttonMatches"),
+    source.indexOf("\n\n  function replaceEntryIcon"),
+  );
+  let currentButtons;
+  let currentSection;
+  const scroll = {
+    querySelector: (selector) => selector === "[data-app-action-sidebar-section]" ? currentSection : null,
+    querySelectorAll: (selector) => selector === "button" ? currentButtons : [],
+  };
+  const findReferenceButton = vm.runInNewContext(`(() => {
+    const EXPLORE_LABELS = ["探索", "explore"];
+    const PLUGIN_LABELS = ["插件", "外掛程式", "plugins", "プラグイン"];
+    const OWNED_ATTRIBUTE = "data-codex-panel-owned";
+    ${normalizedLabelSource}
+    ${referenceSource}
+    return findReferenceButton;
+  })()`, {
+    document: { querySelector: (selector) => selector === "nav[data-app-navigation-rail]" ? null : scroll },
+  });
+
+  for (const textContent of ["插件", "外掛程式", "プラグイン", "Plugins"]) {
+    const currentButton = {
+      textContent,
+      getAttribute: () => null,
+      parentElement: {},
+    };
+    currentButtons = [currentButton];
+    currentSection = null;
+    assert.equal(findReferenceButton(), currentButton);
+  }
+
+  const topButton = (textContent, top, owned = false) => ({
+    textContent,
+    getAttribute: (name) => name === "data-codex-panel-owned" && owned ? "true" : null,
+    getBoundingClientRect: () => ({ top, bottom: top + 30, height: 30 }),
+    parentElement: {},
+  });
+  const unenumeratedPlugin = topButton("Приклучоци", 160);
+  currentButtons = [
+    topButton("Барања за повлекување", 100),
+    topButton("Локации", 120),
+    topButton("Закажано", 140),
+    unenumeratedPlugin,
+    topButton("Panel", 180, true),
+  ];
+  currentSection = { getBoundingClientRect: () => ({ top: 200 }) };
+  assert.equal(findReferenceButton(), unenumeratedPlugin);
 });

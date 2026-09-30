@@ -1,3 +1,4 @@
+import { Toasts, showToast, dismissUndoToast } from "./components/Toasts";
 import { agentPlatformLabel, sessionResumeCommand } from "./agentSessions";
 import {
   lazy,
@@ -233,11 +234,6 @@ interface ProjectContextMenuState {
 interface UndoOperation {
   id: number;
   undo: () => Promise<void>;
-}
-
-interface UndoNotice {
-  id: number;
-  message: string;
 }
 
 interface PendingRemoteThreadClaim {
@@ -845,8 +841,6 @@ export function App() {
   const [selectedProjectAutomation, setSelectedProjectAutomation] = useState<ProjectAutomationPolicy | null>(null);
   const [automationPending, setAutomationPending] = useState(false);
   const [automationError, setAutomationError] = useState<string | null>(null);
-  const [announcement, setAnnouncementValue] = useState("");
-  const [undoNotice, setUndoNotice] = useState<UndoNotice | null>(null);
   const projectsRequestRef = useRef(0);
   const tasksRequestRef = useRef(0);
   const tasksRef = useRef<Task[]>([]);
@@ -888,8 +882,8 @@ export function App() {
   }, [locale]);
 
   const setAnnouncement = useCallback((message: string) => {
-    setUndoNotice(null);
-    setAnnouncementValue(message);
+    dismissUndoToast();
+    showToast(message);
   }, []);
 
   const markDashboardSummaryAnimationStarted = useCallback((projectId: string) => {
@@ -1233,7 +1227,7 @@ export function App() {
       setFilters(EMPTY_TASK_FILTERS);
       rememberProjectOpen(task.projectId);
       undoStackRef.current = [];
-      setUndoNotice(null);
+      dismissUndoToast();
     }
     const fullTask = tasksRef.current.find((candidate) => candidate.identifier === task.identifier);
     if (fullTask) markTaskRead(fullTask);
@@ -2038,8 +2032,7 @@ export function App() {
     const operation = { id: ++undoSequenceRef.current, undo };
     undoStackRef.current = [...undoStackRef.current.slice(-19), operation];
     if (!message) return;
-    setAnnouncementValue("");
-    setUndoNotice({ id: operation.id, message });
+    showToast(message, { label: `${text("撤回", "Undo")} ${undoShortcut}`, run: () => void performUndo() });
   }
 
   async function performUndo() {
@@ -2048,7 +2041,7 @@ export function App() {
     if (!operation) return;
     undoStackRef.current = undoStackRef.current.slice(0, -1);
     undoInFlightRef.current = true;
-    setUndoNotice(null);
+    dismissUndoToast();
     setProjectMenuOpen(false);
     closeContextMenu();
     setActionError(null);
@@ -2623,7 +2616,7 @@ export function App() {
         setFilters(EMPTY_TASK_FILTERS);
         rememberProjectOpen(updated.projectId);
         undoStackRef.current = [];
-        setUndoNotice(null);
+        dismissUndoToast();
         window.history.replaceState(
           window.history.state,
           "",
@@ -3383,7 +3376,7 @@ export function App() {
     setFilters(EMPTY_TASK_FILTERS);
     setActionError(null);
     undoStackRef.current = [];
-    setUndoNotice(null);
+    dismissUndoToast();
     const url = buildIssueUrl(window.location.href, projectId, null);
     window.history.replaceState(null, "", url);
   }
@@ -4735,25 +4728,7 @@ export function App() {
         </Suspense>
       )}
 
-      <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
-      {undoNotice && (
-        <div
-          className="toast undo-toast"
-          role="status"
-          onAnimationEnd={() => setUndoNotice((current) => current?.id === undoNotice.id ? null : current)}
-        >
-          <span aria-hidden="true"><LinearIcon name="check" /></span>
-          <span className="undo-toast-message">{undoNotice.message}</span>
-          <button type="button" onClick={() => void performUndo()}>
-            {text("撤回", "Undo")} <kbd>{undoShortcut}</kbd>
-          </button>
-        </div>
-      )}
-      {announcement && (
-        <div className="toast" role="status" onAnimationEnd={() => setAnnouncementValue("")}>
-          <span aria-hidden="true"><LinearIcon name="check" /></span>{announcement}
-        </div>
-      )}
+      <Toasts />
       </div>
     </TaskboardLanguageProvider>
   );

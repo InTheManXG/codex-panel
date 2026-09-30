@@ -32,9 +32,9 @@
 - 权威上游：`chuspeeism/dashi-taskboard`
 - 上游默认分支：`main`
 - GitHub Fork 创建时间：`2026-08-03T14:40:11Z`
-- 本次合并的上游父提交：`ef90f5bd3f29e9587945abc35c15518f1e6a9311`
-- 精确已合并上游基线：`ef90f5bd3f29e9587945abc35c15518f1e6a9311`
-- 比较范围：`ef90f5bd3f29e9587945abc35c15518f1e6a9311..HEAD`
+- 本次合并的上游父提交：`6a79ef522238ff11681cb85a9d803d19442a3d00`
+- 精确已合并上游基线：`6a79ef522238ff11681cb85a9d803d19442a3d00`
+- 比较范围：`6a79ef522238ff11681cb85a9d803d19442a3d00..HEAD`
 
 持续移动的 `upstream/main` 只有在祖先关系证明它与上述 SHA 相同时才是本文档基线；后续新提交仍属于待合并候选。合并提交本身的 Fork 侧父提交不是比较基线。
 
@@ -58,11 +58,13 @@
 
 子任务入口适配（本轮独立功能提交，长期保留）：详情页的直接创建子任务仅用于普通任务；Jira 需求继续通过已有规划与关联执行任务流程拆分。代码：`web/src/components/TaskDetail.tsx`；验证：`web/src/components/TaskDetail.spec.tsx` 同时覆盖普通任务创建入口与 Jira 原流程。用户文档：中英文 README 与 `docs/fork-capabilities.md#task-organization-and-external-sessions`。来源定位：`git log -S'currentTask.source === "local" ? () => onCreateChild' -- web/src/components/TaskDetail.tsx`。上游若支持 Fork 的 Jira 规划与跨仓库关联约束，再评估吸收此适配。
 
+本轮同步 `6a79ef5`（上游 `1.1.26`）：吸收新版 Codex 导航栏独立入口与原生标题栏拖动区域保留、紧凑账号菜单身份读取及受限 WebP 头像、叠放通知与撤销、待认领评论的重复状态操作隐藏，以及 Windows Store Codex 配套可执行文件缓存。保留 Fork 的 MemoryRouter 导航历史、私有桥、额度适配、产品名和独立版本；不引入绑定上游组织与产品的 SignPath Windows 测试签名流水线。
+
 ## Fork 发布版本策略
 
 - 权威上游版本来源：精确合并基线中的 `package.json`
 - 发布版本来源：规范 `vX.Y.Z-fork` 标签。Actions 在构建目录同步 `package.json`、`package-lock.json` 根包条目、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 和 `src-tauri/Cargo.lock` 的 launcher 条目；main 中的字段仅作本地开发构建版本，不代表最新 Release。
-- 精确基线的上游版本：`1.1.24`（本次同步代码基线，不改变 Fork 发布版本）
+- 精确基线的上游版本：`1.1.26`（本次同步代码基线，不改变 Fork 发布版本）
 - 最近已核实发布：`v0.0.3-fork`。后续发布以 GitHub 标签与 Release 为准，无需逐版修改此台账。
 
 Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标签为 `vX.Y.Z-fork`；后续按 Fork 自身变更递增。上游版本只记录合并基线，不决定、重置或覆盖 Fork 版本。此决定替代旧的 `<upstream-version>-fork.<N>` 策略，后续应用 fork-doc 时以本仓库约定为准。
