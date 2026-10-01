@@ -1,5 +1,7 @@
 # Codex Panel
 
+After Codex updates on macOS, Panel reconnects when a debugging port is available. If launch parameters were lost, the manager offers **恢复连接** (Restore connection); restarting Codex requires confirmation. See [update recovery](docs/codex-compatibility.md#recovery-after-desktop-updates).
+
 The custom-provider send-limit switch retains its adapter when reconnecting to a window whose composer already loads through a module mapping.
 
 Panel also supports sidebars without Plugins or pets, including Free accounts, by placing its entry after New chat when needed. Panel appears on its own row below the complete New chat row, preserving New chat and Quick chat.

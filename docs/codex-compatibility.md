@@ -36,3 +36,11 @@ GitHub Actions [Check run 36660877729](https://github.com/InTheManXG/codex-panel
 No signed-in desktop injection or real model submission was performed. Windows/Linux desktop interaction was not exercised. These steps remain necessary before claiming a fully verified desktop release. No installed app, production Panel data, login credentials, or existing conversations were modified. CI verification is not a published or notarized release.
 
 To build the macOS launcher on a machine with the required toolchain, install Node.js 22.5+, Xcode command-line tools, and Rust, then follow the repository's `npm ci` and `npm run app:build:local` instructions. Install only after reviewing the resulting build.
+
+## Recovery after desktop updates
+
+On macOS, Codex can restart after an update without the debugging arguments that Panel supplied. A desktop version allowlist is not involved: Panel still verifies the official application signature and reconnects automatically if it finds a usable port.
+
+When an ordinary Codex process is running without those arguments, Panel brings its management window forward once and offers **恢复连接** (Restore connection). Confirm **重新启动 Codex** to relaunch with the connection arguments; running tasks may be interrupted, so save work first. **稍后** leaves both Codex and the existing Panel service running, including port discovery. Panel does not modify the installed Codex application or automatically terminate active work.
+
+Verification uses isolated launcher state and simulated port recovery. This does not guarantee compatibility with future changes to Codex's internal UI, and the next official updater cycle still requires field confirmation.

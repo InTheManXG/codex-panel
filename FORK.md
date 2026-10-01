@@ -1,3 +1,5 @@
+更新后连接恢复（等待上游吸收）：现场已确认 Codex 26.928.31416 普通启动时没有 remote-debugging 参数，Panel 持续轮询旧端口。macOS 启动器复用普通进程检测，在连接未就绪且参数缺失时只在状态变化后显示管理窗口；轮询错误不能覆盖恢复提示，端口可用后仍自动恢复。用户点“恢复连接”后复用已可置前的原生确认框，选择“稍后”不停止现有 Panel 服务，不自动退出用户 Codex，不绑定版本号、不修改官方应用。源文件 `src-tauri/src/main.rs`、`src-tauri/src/update_dialog.rs`、`launcher/src/App.tsx`；验证 `renderer_readiness_downgrades_without_losing_a_pending_open`、`launcher/src/App.spec.tsx`、`test/codex-reconnect.test.mjs` 及隔离原生弹窗。说明同步中英文 README、CHANGELOG、`docs/codex-compatibility.md` 和 `docs/fork-capabilities.md`。来源 `git log -S'confirm_ordinary_codex_restart' -- src-tauri/src/main.rs`；合并保留确认先于停止服务，上游等价实现后移除此差异。下一次官方自动更新全过程仍需现场确认。按维护契约手工同步，当前环境未提供 fork-doc 技能。
+
 # Fork 维护说明
 
 自定义 API 适配重新发现（等待上游吸收）：真实窗口已安装映射但 performance 仅剩 CSS，旧发现逻辑重注入时读取失败并移除适配。`scripts/codex-provider-quota.mjs` 从现有 importmap 的原 URL 识别当前 app-primary 模块；无效映射跳过，仍需源码结构验证，保留官方 provider 及其他发送阻止条件。验证 `test/codex-provider-quota.test.mjs` 的 blob-only 重注入复现、新旧开关与发送边界，以及 `test/injector.test.mjs`；对方 26.928.21956 原脚本匹配和改写语法已通过，本机真实 importmap 只读发现通过，对方最终发送待确认。来源 `git log -S'从已安装的映射找回当前模块' -- scripts/codex-provider-quota.mjs`；上游等价修复后移除。
@@ -12,7 +14,7 @@ Free 侧边栏兼容（等待上游吸收）：没有插件、宠物及 destinat
 
 分离窗口识别（等待上游吸收）：用户现场日志确认 `detached-window.html?initialRoute=%2Fdetached-window` 无 Panel 入口。injector 按 URL 路径及解析后的 initialRoute 排除此类窗口，避免重载和注入分离聊天；入口未挂载或 source hash 不符时不得返回注入成功；只有主窗口存在时才注入，无主窗口时明确提示打开含项目侧边栏的主窗口。代码 `scripts/codex-injector.mjs`；验证 `test/codex-window-target.test.mjs` 覆盖现场 URL、编码路由、主窗口保留、两条注入路径超时后清理连接。真实登录后挂载仍需现场验证；可选 quota adapter 不可用不等于 CDP 断连。
 
-连接恢复（等待上游吸收）：调试端口中断后，macOS 常驻 injector 重新发现有效 Codex 端口、清理旧连接并更新运行描述；启动等待普通 Codex 退出期间也探测新出现的有效端口。失效候选不阻止后续候选探测。`waitingForCodex.message` 将端口和底层错误码传给启动器，提示实际“重启服务”入口，保留本机回环与原有原点校验。不自动关闭用户 Codex。代码：`scripts/codex-injector.mjs`、`src-tauri/src/main.rs`；针对性验证：`test/codex-reconnect.test.mjs` 和 `test/injector.test.mjs`。用户日志只证明连接请求失败，最初断连原因尚未确认；不得把模拟端口恢复或构建成功描述为用户现场已恢复。上游具备等价发现与错误显示后移除此条目。
+连接恢复（等待上游吸收）：调试端口中断后，macOS 常驻 injector 重新发现有效 Codex 端口、清理旧连接并更新运行描述；启动等待普通 Codex 退出期间也探测新出现的有效端口。失效候选不阻止后续候选探测。`waitingForCodex.message` 将端口和底层错误码传给启动器，提示实际“重启服务”入口，保留本机回环与原有原点校验。不自动关闭用户 Codex。代码：`scripts/codex-injector.mjs`、`src-tauri/src/main.rs`；针对性验证：`test/codex-reconnect.test.mjs` 和 `test/injector.test.mjs`。后续现场已确认更新或普通启动后的 Codex 缺少调试启动参数，恢复入口见“更新后连接恢复”条目；不得把模拟端口恢复或构建成功描述为未来更新全过程已验证。上游具备等价发现与错误显示后移除此条目。
 
 ## 2026-09-30 最新版兼容
 

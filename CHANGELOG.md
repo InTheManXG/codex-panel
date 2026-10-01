@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Detect macOS Codex restarts without Panel connection parameters and show a Restore connection action. Reuse the visible native restart confirmation; deferring keeps the existing service running. No desktop version allowlist is added.
+
 - Preserve custom-provider adaptation on reinjection by discovering the current composer URL from existing import maps after blob loading.
 
 - Place Panel below the complete New chat row so it does not squeeze or cover New chat and Quick chat.

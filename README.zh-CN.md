@@ -1,5 +1,7 @@
 # Codex Panel
 
+macOS 上 Codex 更新后，连接端口可用时 Panel 自动重连；启动参数丢失时，管理窗口会提示“恢复连接”，确认后才重启 Codex。详见[更新后恢复连接](docs/codex-compatibility.md#recovery-after-desktop-updates)。
+
 自定义 API 发送限制开关在重新连接已安装模块映射的窗口时，会重新识别输入框脚本并保留适配。
 
 任务面板兼容 Free 等没有插件或宠物入口的侧边栏，必要时在“新聊天”下方显示入口。 任务面板独占“新聊天”整行下方的一行，保留原有新聊天和快速聊天操作。
