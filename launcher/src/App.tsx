@@ -29,7 +29,7 @@ export type TauriBridge = {
 declare global { interface Window { __TAURI__: TauriBridge } }
 
 const labels: Record<string, string> = { running: "运行正常", waiting: "等待 Codex", restart_required: "需要重启 Codex", error: "运行异常", stopped: "已停止", starting: "启动中" };
-const titles: Record<string, string> = { running: "Panel 已就绪", waiting: "服务已启动", restart_required: "Codex 未开启调试端口", error: "服务需要处理", stopped: "服务已停止", starting: "正在建立连接" };
+const titles: Record<string, string> = { running: "Panel 已就绪", waiting: "服务已启动", restart_required: "需要重启 Codex", error: "服务需要处理", stopped: "服务已停止", starting: "正在建立连接" };
 const initialSnapshot: LauncherSnapshot = {
   phase: "starting", version: "—", message: "正在读取服务状态…", childPid: null,
   embeddedVisible: false, openRequestPending: false, updateMessage: "尚未检查更新。",
@@ -195,7 +195,7 @@ export function App() {
 
   const componentStates = [
     { id: "panel", label: "Panel 服务", text: snapshot.phase === "error" ? "启动异常" : hasProcess ? `运行中 · PID ${snapshot.childPid}` : "未启动", tone: snapshot.phase === "error" ? "error" : hasProcess ? "running" : "stopped" },
-    { id: "codex", label: "Codex 连接", text: snapshot.phase === "error" ? "连接失败" : needsRestart ? "调试端口未开启" : ready ? "连接已就绪" : hasProcess ? "正在等待连接" : "未连接", tone: snapshot.phase === "error" ? "error" : ready ? "running" : hasProcess ? "waiting" : "stopped" },
+    { id: "codex", label: "Codex 连接", text: snapshot.phase === "error" ? "连接失败" : needsRestart ? "需要重启 Codex" : ready ? "连接已就绪" : hasProcess ? "正在等待连接" : "未连接", tone: snapshot.phase === "error" ? "error" : ready ? "running" : hasProcess ? "waiting" : "stopped" },
     { id: "embedded", label: "内嵌面板", text: snapshot.embeddedVisible ? "已在 Codex 中打开" : opening ? "正在打开" : queued ? "等待连接后打开" : ready ? "可以打开" : "尚未就绪", tone: snapshot.embeddedVisible ? "running" : opening || queued ? "waiting" : ready ? "available" : "stopped" },
   ];
 

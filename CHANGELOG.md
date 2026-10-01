@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Shorten the recovery prompt to “Codex 已经更新，请点击下方按钮重新启动”; retain the Restart Codex and connect action.
+
 - Clarify missing-debugging-port prompts: identify the startup cause, explain that no Panel upgrade or reinstallation is needed, label the action Restart Codex and connect, and advise launching Codex from Panel next time.
 
 - Detect macOS Codex restarts without Panel connection parameters and show a Restore connection action. Reuse the visible native restart confirmation; deferring keeps the existing service running. No desktop version allowlist is added.

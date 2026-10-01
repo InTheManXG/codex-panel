@@ -210,8 +210,8 @@ impl UpdateDialog {
 impl UpdateDialog {
     pub(super) fn confirm_codex_restart(app: &AppHandle) -> bool {
         // 复用可置前的原生确认框，避免后台启动器的 Tauri 弹窗不可见而卡住恢复。
-        let Some(dialog) = Self::prompt_message(app, "Codex 未开启调试端口",
-            "当前 Codex 启动时未开启调试端口，Panel 因此无法连接。这不是版本限制，无需升级或重装 Panel。\n\n点击“重启 Codex 并连接”将关闭并重新打开 Codex，正在运行的任务可能中断，请先保存工作。\n\n以后请从 Codex Panel 启动 Codex。".into(),
+        let Some(dialog) = Self::prompt_message(app, "需要重启 Codex",
+            "Codex 已经更新，请点击下方按钮重新启动".into(),
             "重启 Codex 并连接") else {
             return false;
         };

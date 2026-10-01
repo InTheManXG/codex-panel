@@ -41,7 +41,7 @@ To build the macOS launcher on a machine with the required toolchain, install No
 
 On macOS, Codex can restart after an update without the debugging arguments that Panel supplied. A desktop version allowlist is not involved: Panel still verifies the official application signature and reconnects automatically if it finds a usable port.
 
-The prompt explicitly identifies the missing debugging port, explains that this is not a version restriction and requires no Panel upgrade or reinstallation, and advises starting Codex from Panel next time.
+The recovery prompt uses the short text **Codex 已经更新，请点击下方按钮重新启动**. This copy does not change the existing launch-parameter detection.
 
 When an ordinary Codex process is running without those arguments, Panel brings its management window forward once and offers **重启 Codex 并连接** (Restart Codex and connect). Confirm **重启 Codex 并连接** to relaunch with the connection arguments; running tasks may be interrupted, so save work first. **稍后** leaves both Codex and the existing Panel service running, including port discovery. Panel does not modify the installed Codex application or automatically terminate active work.
 
