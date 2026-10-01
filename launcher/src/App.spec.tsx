@@ -102,8 +102,8 @@ it("keeps launcher feedback, live status and global preferences working through 
   expect(button("restartService").classList.contains("is-success")).toBe(true);
 
   // 更新丢失启动参数时，即使此前排队打开面板，恢复按钮也必须可点击。
-  await publish({ phase: "restart_required", openRequestPending: true, message: "Codex 更新后缺少面板连接参数。" });
-  expect(screen.getByRole("button", { name: "恢复连接" })).toBeTruthy();
+  await publish({ phase: "restart_required", openRequestPending: true, message: "当前 Codex 启动时未开启调试端口。" });
+  expect(screen.getByRole("button", { name: "重启 Codex 并连接" })).toBeTruthy();
   expect(button("panelAction").disabled).toBe(false);
   const recoveryCount = invoke.mock.calls.filter(([command]) => command === "reconnect_codex").length;
   await click(button("panelAction"));

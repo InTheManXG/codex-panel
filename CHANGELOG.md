@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Clarify missing-debugging-port prompts: identify the startup cause, explain that no Panel upgrade or reinstallation is needed, label the action Restart Codex and connect, and advise launching Codex from Panel next time.
+
 - Detect macOS Codex restarts without Panel connection parameters and show a Restore connection action. Reuse the visible native restart confirmation; deferring keeps the existing service running. No desktop version allowlist is added.
 
 - Preserve custom-provider adaptation on reinjection by discovering the current composer URL from existing import maps after blob loading.

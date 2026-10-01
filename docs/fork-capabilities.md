@@ -1,6 +1,6 @@
 # Fork capabilities
 
-On macOS, Panel detects Codex restarts that lost connection arguments, offers **恢复连接**, and requires confirmation before restarting Codex. See [update recovery](codex-compatibility.md#recovery-after-desktop-updates).
+On macOS, Panel detects Codex restarts that lost connection arguments, offers **重启 Codex 并连接**, and requires confirmation before restarting Codex. See [update recovery](codex-compatibility.md#recovery-after-desktop-updates).
 
 For the 2026-09-30 desktop/CLI compatibility target, packaged macOS executable layout, new model options, and validation limits, see [Codex compatibility](codex-compatibility.md).
 

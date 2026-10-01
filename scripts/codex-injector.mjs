@@ -221,7 +221,7 @@ async function fetchJson(url) {
   try {
     response = await fetch(url, { signal: AbortSignal.timeout(3_000) });
   } catch (error) {
-    throw new Error(`无法连接 Codex 调试端口 ${new URL(url).port}（${error.cause?.code || error.name}）。请点击 Panel 的“重启服务”，并同意重新启动 Codex；普通方式打开的 Codex 可能未启用调试端口。`, { cause: error });
+    throw new Error(`无法连接 Codex 调试端口 ${new URL(url).port}（${error.cause?.code || error.name}）。直接打开 Codex 可能未开启调试端口。请先保存工作，再在 Panel 点击“重启服务”，按提示重启 Codex；以后请从 Codex Panel 启动 Codex。`, { cause: error });
   }
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return response.json();
@@ -3089,7 +3089,7 @@ async function main() {
       console.error(
         "Waiting for Codex: the running app has no debugging port; Panel service remains available.",
       );
-      emitLauncherEvent("waitingForCodex", { message: "Codex 已运行，但未开启面板连接端口。请点击“重启服务”，并同意重新启动 Codex。" });
+      emitLauncherEvent("waitingForCodex", { message: "Codex 已运行，但 Panel 无法连接它的调试端口。请先保存工作，再在 Panel 点击“重启服务”，按提示重启 Codex；以后请从 Codex Panel 启动 Codex。" });
       while (!stopping && codexIsRunning()) {
         await Promise.race([
           new Promise((resolve) => setTimeout(resolve, 500)),

@@ -1164,7 +1164,7 @@ fn status_menu_label(phase: &str) -> &'static str {
     match phase {
         "running" => "运行状态：正常",
         "waiting" => "运行状态：等待 Codex",
-        "restart_required" => "运行状态：需要恢复连接",
+        "restart_required" => "运行状态：Codex 未开启调试端口",
         "error" => "运行状态：异常",
         "stopped" => "运行状态：已停止",
         _ => "运行状态：启动中",
@@ -1601,7 +1601,7 @@ fn apply_waiting_for_codex(snapshot: &mut LauncherSnapshot) {
 
 fn apply_codex_restart_required(snapshot: &mut LauncherSnapshot) {
     snapshot.phase = "restart_required".into();
-    snapshot.message = "Codex 更新或普通启动后缺少面板连接参数。点击“恢复连接”，确认重启 Codex 后恢复；正在运行的任务可能中断。".into();
+    snapshot.message = "当前 Codex 启动时未开启调试端口，Panel 因此无法连接。这不是版本限制，无需升级或重装 Panel。请先保存工作，再点击“重启 Codex 并连接”；重启可能中断正在运行的任务。以后请从 Codex Panel 启动 Codex。".into();
     snapshot.open_signal_pid = None;
     snapshot.embedded_visible = false;
 }
@@ -3507,11 +3507,11 @@ mod tests {
         // 更新后的普通进程需要用户确认；后续轮询不能把提示冲掉。
         super::apply_codex_restart_required(&mut snapshot);
         assert_eq!(snapshot.phase, "restart_required");
-        assert_eq!(status_menu_label(&snapshot.phase), "运行状态：需要恢复连接");
+        assert_eq!(status_menu_label(&snapshot.phase), "运行状态：Codex 未开启调试端口");
         apply_waiting_for_codex(&mut snapshot);
         apply_renderer_status(&mut snapshot, 42, RendererStatus::default());
         assert_eq!(snapshot.phase, "restart_required");
-        assert!(snapshot.message.contains("恢复连接"));
+        assert!(snapshot.message.contains("重启 Codex 并连接"));
         assert_eq!(snapshot.open_signal_pid, None);
         assert!(snapshot.open_request_pending);
         apply_renderer_status(

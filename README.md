@@ -1,6 +1,6 @@
 # Codex Panel
 
-After Codex updates on macOS, Panel reconnects when a debugging port is available. If launch parameters were lost, the manager offers **恢复连接** (Restore connection); restarting Codex requires confirmation. See [update recovery](docs/codex-compatibility.md#recovery-after-desktop-updates).
+After Codex updates on macOS, Panel reconnects when a debugging port is available. If launch parameters were lost, the manager offers **重启 Codex 并连接** (Restart Codex and connect); restarting Codex requires confirmation. See [update recovery](docs/codex-compatibility.md#recovery-after-desktop-updates).
 
 The custom-provider send-limit switch retains its adapter when reconnecting to a window whose composer already loads through a module mapping.
 
