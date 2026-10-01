@@ -2514,7 +2514,7 @@ async function injectTarget(
         throw new Error("Panel 入口尚未挂载：Codex 侧边栏尚未就绪或布局不兼容。调试连接已成功，请保留当前窗口并查看日志。");
       }
       if (shouldRemainOpen && (!status.pageVisible || !status.frameReady || !frameLoaded)) {
-        throw new Error("Panel frame did not report ready in the Codex renderer");
+        throw new Error("Codex 中的任务面板尚未就绪，请稍后重试。");
       }
       retained = true;
       return {
@@ -2551,7 +2551,7 @@ async function injectTarget(
       throw new Error("Panel 入口尚未挂载：Codex 侧边栏尚未就绪或布局不兼容。调试连接已成功，请保留当前窗口并查看日志。");
     }
     if (shouldOpen && (!status.pageVisible || !status.frameReady || !frameLoaded)) {
-      throw new Error("Panel frame did not report ready in the Codex renderer");
+      throw new Error("Codex 中的任务面板尚未就绪，请稍后重试。");
     }
     const result = {
       ...status,

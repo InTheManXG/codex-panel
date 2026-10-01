@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Localize the Panel-frame-not-ready error into Chinese for both initial injection and reconnection.
+
 - Shorten the recovery prompt to “Codex 已经更新，请点击下方按钮重新启动”; retain the Restart Codex and connect action.
 
 - Clarify missing-debugging-port prompts: identify the startup cause, explain that no Panel upgrade or reinstallation is needed, label the action Restart Codex and connect, and advise launching Codex from Panel next time.
