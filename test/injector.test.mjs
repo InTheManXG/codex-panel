@@ -8,7 +8,7 @@ import path from "node:path";
 import { Readable, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
-const source = await readFile(new URL("../scripts/codex-injector.mjs", import.meta.url), "utf8");
+const source = (await readFile(new URL("../scripts/codex-injector.mjs", import.meta.url), "utf8")).replaceAll("\r\n", "\n");
 const runtimeSource = await readFile(
   new URL("../scripts/codex-injector-runtime.mjs", import.meta.url),
   "utf8",
