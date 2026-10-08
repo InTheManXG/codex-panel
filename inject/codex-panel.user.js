@@ -91,6 +91,8 @@
   let nativeNavigator = null;
   let detachNativeNavigation = null;
   let lastNativeLocation = null;
+  const panelLocationKeys = new Set();
+  let pendingPanelNavigation = false;
   let lastNativeProjectId = "";
   let currentCodexUser = null;
   let suspendedNativeBrowserPanel = null;
@@ -228,11 +230,12 @@
     style.id = STYLE_ID;
     style.setAttribute(OWNED_ATTRIBUTE, "true");
     style.textContent = `
-      #${ENTRY_ID} {
-        color: var(--color-token-foreground, inherit);
+      #${ENTRY_ID}:not([aria-current="page"]) {
+        color: var(--button-text-color, var(--color-token-foreground, inherit));
       }
       #${ENTRY_ID}[aria-current="page"] {
         background: var(--color-token-list-hover-background, color-mix(in srgb, currentColor 8%, transparent));
+        color: var(--color-token-foreground, inherit);
       }
       #${ENTRY_ID}:focus-visible {
         outline: 2px solid var(--color-token-border, Highlight);
@@ -266,17 +269,22 @@
       :root[data-codex-panel-open="true"] nav[data-app-navigation-rail] button[data-selected]:not(#${ENTRY_ID}):not(:hover)::before {
         opacity: 0 !important;
       }
-      [${NATIVE_ICON_ATTRIBUTE}="outline"],
       #${ENTRY_ID} [data-panel-icon="filled"] {
         display: none;
       }
-      :root[data-codex-panel-open="true"] [data-selected] [${NATIVE_ICON_ATTRIBUTE}="original"],
       #${ENTRY_ID}[data-selected] [data-panel-icon="outline"] {
         display: none;
       }
-      :root[data-codex-panel-open="true"] [data-selected] [${NATIVE_ICON_ATTRIBUTE}="outline"],
       #${ENTRY_ID}[data-selected] [data-panel-icon="filled"] {
         display: initial;
+      }
+      /* Keep React's SVG node and the native button's focus-ring pseudo-element. */
+      :root[data-codex-panel-open="true"] button[data-selected][${NATIVE_ICON_ATTRIBUTE}] svg {
+        background: currentColor;
+        mask: var(--codex-panel-native-icon) center / contain no-repeat;
+      }
+      :root[data-codex-panel-open="true"] button[data-selected][${NATIVE_ICON_ATTRIBUTE}] svg > * {
+        visibility: hidden;
       }
       #${PAGE_ID} {
         position: absolute;
@@ -456,9 +464,11 @@
       || Array.from(button.querySelectorAll("span")).find((node) => buttonMatches(node, PLUGIN_LABELS));
     if (label) {
       label.textContent = "任务面板";
-      // 只复用图标和文字的样式；原生入口的提示点没有 Panel 状态来源，复制后会常驻。
-      const icon = button.querySelector(".icon-leading-slot") || button.querySelector("svg");
-      button.replaceChildren(...(icon ? [icon, label] : [label]));
+      // 导航栏沿用本地图标容器；展开侧栏只保留图标和文字，去掉原生提示点。
+      if (!reference.closest("nav[data-app-navigation-rail]")) {
+        const icon = button.querySelector(".icon-leading-slot") || button.querySelector("svg");
+        button.replaceChildren(...(icon ? [icon, label] : [label]));
+      }
     } else button.textContent = "任务面板";
     replaceEntryIcon(button);
     button.addEventListener("click", (event) => {
@@ -543,22 +553,18 @@
     document.querySelectorAll('nav[data-app-navigation-rail] [data-sidebar-destination]')
       .forEach((button) => {
         const body = NATIVE_OUTLINE_ICONS[button.getAttribute("data-sidebar-destination")];
-        const original = button.querySelector(`svg:not([${OWNED_ATTRIBUTE}])`);
-        if (!body || !original || original.hasAttribute(NATIVE_ICON_ATTRIBUTE)) return;
-        button.querySelector(`[${NATIVE_ICON_ATTRIBUTE}="outline"]`)?.remove();
-        original.setAttribute(NATIVE_ICON_ATTRIBUTE, "original");
-        const outline = original.cloneNode(false);
-        outline.setAttribute(OWNED_ATTRIBUTE, "true");
-        outline.setAttribute(NATIVE_ICON_ATTRIBUTE, "outline");
-        outline.innerHTML = body;
-        original.after(outline);
+        if (!body || button.hasAttribute(NATIVE_ICON_ATTRIBUTE)) return;
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">${body}</svg>`;
+        button.style.setProperty("--codex-panel-native-icon", `url("data:image/svg+xml,${encodeURIComponent(svg)}")`);
+        button.setAttribute(NATIVE_ICON_ATTRIBUTE, "outline");
       });
   }
 
   function restoreNativeRailIcons() {
-    document.querySelectorAll(`[${NATIVE_ICON_ATTRIBUTE}="outline"]`).forEach((node) => node.remove());
-    document.querySelectorAll(`[${NATIVE_ICON_ATTRIBUTE}="original"]`)
-      .forEach((node) => node.removeAttribute(NATIVE_ICON_ATTRIBUTE));
+    document.querySelectorAll(`button[${NATIVE_ICON_ATTRIBUTE}]`).forEach((button) => {
+      button.removeAttribute(NATIVE_ICON_ATTRIBUTE);
+      button.style.removeProperty("--codex-panel-native-icon");
+    });
   }
 
   function currentTheme() {
@@ -995,42 +1001,32 @@
       || normalizedLabel(button.getAttribute("aria-label")).includes("个人资料")
     ));
     if (!profileButton) return null;
+    // The compact rail already carries the identity in its profile component.
+    // Opening its menu to read hidden text visibly opens Codex's settings menu.
+    const fiberKey = Object.keys(profileButton).find((key) => key.startsWith("__reactFiber$"));
+    const propsKey = Object.keys(profileButton).find((key) => key.startsWith("__reactProps$"));
+    let owner = profileButton[fiberKey];
+    if (owner?.alternate && owner.alternate.memoizedProps === profileButton[propsKey]) owner = owner.alternate;
+    for (let fiber = owner; fiber; fiber = fiber.return) {
+      const footer = fiber.memoizedProps?.sidebarFooter;
+      if (!footer) continue;
+      const identity = footer.profileIdentity;
+      const name = identity?.displayName?.trim();
+      if (!name) return null;
+      return {
+        type: "user", id: userId || userIdFromName(name), name,
+        avatarUrl: await normalizeCodexAvatar(identity.profileImageUrl ?? null),
+      };
+    }
     const name = profileButton.textContent?.replace(/\s+/g, " ").trim();
     if (userId && name) {
       const avatar = profileButton.querySelector("img");
       return { type: "user", id: userId, name, avatarUrl: await normalizeCodexAvatar(avatar?.currentSrc || avatar?.src || null) };
     }
-    const openedMenu = profileButton.getAttribute("aria-expanded") !== "true";
-    let identity;
-    try {
-      if (openedMenu) {
-        // Radix opens on ArrowDown; HTMLElement.click() does not run its trigger handler.
-        profileButton.dispatchEvent(new KeyboardEvent("keydown", {
-          key: "ArrowDown", code: "ArrowDown", bubbles: true, cancelable: true,
-        }));
-      }
-      const deadline = Date.now() + 1_200;
-      do {
-        identity = readCodexProfileIdentity(profileButton);
-        if (identity) break;
-        await new Promise((resolve) => window.setTimeout(resolve, 40));
-      } while (Date.now() < deadline);
-      if (!identity) return null;
-    } finally {
-      const menu = openedMenu ? codexProfileMenu(profileButton) : null;
-      if (menu) {
-        menu.dispatchEvent(new KeyboardEvent("keydown", {
-          key: "Escape", code: "Escape", bubbles: true, cancelable: true,
-        }));
-        const deadline = Date.now() + 1_200;
-        while (profileButton.getAttribute("aria-expanded") === "true" && Date.now() < deadline) {
-          await new Promise((resolve) => window.setTimeout(resolve, 40));
-        }
-        if (profileButton.getAttribute("aria-expanded") === "true") {
-          return null;
-        }
-      }
-    }
+    // Older layouts may expose identity in an already-open menu. Reading it
+    // must never open a settings menu as a side effect of opening Panel.
+    const identity = readCodexProfileIdentity(profileButton);
+    if (!identity) return null;
     return {
       type: "user",
       id: userId || userIdFromName(identity.name),
@@ -2549,6 +2545,7 @@
       if (router?.state?.location && typeof router.navigate === "function" && typeof router.subscribe === "function") {
         nativeNavigator = {
           get location() { return router.state.location; },
+          get action() { return router.state.historyAction; },
           push(path, state) { return router.navigate(path, { state }); },
           go(delta) { return router.navigate(delta); },
         };
@@ -2586,10 +2583,27 @@
     if (destroyed || !nativeNavigator) return;
     const location = nativeNavigator.location;
     if (location === lastNativeLocation) return;
+    const previousLocation = lastNativeLocation;
     lastNativeLocation = location;
+    // Codex replaces route state in place and assigns a new key after Panel opens.
+    if (nativeNavigator.action === "REPLACE"
+      && panelLocationKeys.has(previousLocation?.key)
+      && location.state?.[PANEL_ROUTE_STATE] === true
+      && location.pathname === previousLocation.pathname
+      && location.search === previousLocation.search
+      && location.hash === previousLocation.hash) {
+      panelLocationKeys.delete(previousLocation.key);
+      panelLocationKeys.add(location.key);
+    }
     const match = location.pathname.match(/^\/local\/([^/]+)$/);
     if (match) lastNativeThreadId = normalizeThreadId(decodeURIComponent(match[1]));
-    if (location.state?.[PANEL_ROUTE_STATE] === true) {
+    // Native destinations copy cached route state into new history entries.
+    // Only history keys created by opening Panel may restore it.
+    if (pendingPanelNavigation && location.state?.[PANEL_ROUTE_STATE] === true) {
+      panelLocationKeys.add(location.key);
+      pendingPanelNavigation = false;
+    }
+    if (location.state?.[PANEL_ROUTE_STATE] === true && panelLocationKeys.has(location.key)) {
       if (!active) showPanel();
     } else if (active) {
       closePanel(false);
@@ -2597,16 +2611,21 @@
     void publishPendingThreadAssociation();
   }
 
-  function openPanel() {
-    if (destroyed || active) return;
+  async function openPanel() {
+    if (destroyed || active || pendingPanelNavigation) return;
     if (!connectNativeNavigation()) {
       throw new Error("无法连接 Codex 原生导航，请等待页面加载后重试");
     }
     const { pathname, search, hash, state } = nativeNavigator.location;
-    if (state?.[PANEL_ROUTE_STATE] === true) {
+    if (state?.[PANEL_ROUTE_STATE] === true && panelLocationKeys.has(nativeNavigator.location.key)) {
       showPanel();
     } else {
-      nativeNavigator.push({ pathname, search, hash }, { [PANEL_ROUTE_STATE]: true });
+      pendingPanelNavigation = true;
+      try {
+        await nativeNavigator.push({ pathname, search, hash }, { [PANEL_ROUTE_STATE]: true });
+      } finally {
+        pendingPanelNavigation = false;
+      }
     }
   }
 
@@ -2620,10 +2639,12 @@
 
   function onDocumentClick(event) {
     const destination = event.target?.closest?.('nav[data-app-navigation-rail] [data-sidebar-destination]');
+    if (destination) pendingPanelNavigation = false;
     if (!active || destination?.getAttribute("aria-current") !== "page") return;
     event.preventDefault();
     event.stopPropagation();
-    leavePanel();
+    const { pathname, search, hash, state } = nativeNavigator.location;
+    nativeNavigator.push({ pathname, search, hash }, { ...state, [PANEL_ROUTE_STATE]: false });
   }
 
   function scheduleRefresh() {

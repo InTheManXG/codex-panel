@@ -1,5 +1,7 @@
 # Codex Panel
 
+Opening Panel automatically reads the available account name and avatar without opening the native profile menu.
+The Panel rail entry keeps its native icon alignment and inactive color, with its selected color unchanged. Native destination clicks no longer restore a cached Panel entry. Native state updates on the same page keep Panel open from either the sidebar or the App.
 After Codex updates on macOS, Panel reconnects when a debugging port is available. If launch parameters were lost, the manager offers **重启 Codex 并连接** (Restart Codex and connect); restarting Codex requires confirmation. See [update recovery](docs/codex-compatibility.md#recovery-after-desktop-updates).
 
 The custom-provider send-limit switch retains its adapter when reconnecting to a window whose composer already loads through a module mapping.

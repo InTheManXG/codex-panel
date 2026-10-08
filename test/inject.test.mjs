@@ -299,7 +299,7 @@ test("opening Panel preserves native selection and the titlebar", () => {
   assert.match(source, /syncNativeRailIcons\(\)/);
   assert.match(source, /restoreNativeRailIcons\(\)/);
   assert.match(source, /destination\?\.getAttribute\("aria-current"\) !== "page"/);
-  assert.match(source, /function onDocumentClick[\s\S]*event\.stopPropagation\(\)[\s\S]*leavePanel\(\);/);
+  assert.match(source, /function onDocumentClick[\s\S]*event\.stopPropagation\(\)[\s\S]*nativeNavigator\.push\(/);
 });
 
 test("the embedded page sits below the native titlebar without a full-page no-drag region", () => {
@@ -1724,14 +1724,15 @@ test("Panel participates in the native memory router and restores its original m
   const { document } = dom.window;
   const native = document.getElementById("native");
   const panel = document.getElementById("panel");
-  const entries = [{ pathname: "/local/task-1", search: "?view=review", hash: "", state: { prefillPrompt: "do not replay" } }];
+  let nextKey = 0;
+  const entries = [{ key: "initial", pathname: "/local/task-1", search: "?view=review", hash: "", state: { prefillPrompt: "do not replay" } }];
   let index = 0, renderCount = 0;
   const render = () => { native.textContent = navigator.location.pathname; renderCount++; };
   // Same contract as Codex's MemoryRouter: one React listener; location changes synchronously.
   const navigator = {
     get location() { return entries[index]; },
-    push(path, state) { entries.splice(++index, entries.length, { ...path, state }); render(); },
-    replace(path, state) { entries[index] = { ...path, state }; render(); },
+    push(path, state) { entries.splice(++index, entries.length, { ...path, state, key: String(++nextKey) }); render(); },
+    replace(path, state) { entries[index] = { ...path, state, key: String(++nextKey) }; render(); },
     go(delta) { index = Math.max(0, Math.min(entries.length - 1, index + delta)); render(); },
     listen() { throw Error("must not replace React's listener"); },
   };
@@ -1743,6 +1744,7 @@ test("Panel participates in the native memory router and restores its original m
   const end = source.indexOf("  function scheduleRefresh()", start);
   const api = vm.runInNewContext(`(() => {
     let nativeNavigator = null, detachNativeNavigation = null, lastNativeLocation = null, active = false, destroyed = false, lastNativeThreadId = "";
+    const panelLocationKeys = new Set(); let pendingPanelNavigation = false;
     const PANEL_ROUTE_STATE = "__codexPanel";
     const normalizeThreadId = value => value;
     const publishPendingThreadAssociation = () => {};
@@ -1895,7 +1897,8 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
 });
 
 test("Panel follows Data Router navigation without navigator.location and unsubscribes", async () => {
-  const entries = [{ pathname: "/local/task-1", search: "", hash: "", state: null }];
+  let nextKey = 0;
+  const entries = [{ key: "initial", pathname: "/local/task-1", search: "", hash: "", state: null }];
   let index = 0;
   const listeners = new Set();
   const router = {
@@ -1905,7 +1908,7 @@ test("Panel follows Data Router navigation without navigator.location and unsubs
       // 模拟新版导航异步提交，不能把调用 navigate 当成页面已经切换。
       await Promise.resolve();
       if (typeof path === "number") index += path;
-      else entries.splice(++index, entries.length, { ...path, state: options?.state });
+      else entries.splice(++index, entries.length, { ...path, state: options?.state, key: String(++nextKey) });
       listeners.forEach((listener) => listener(router.state));
     },
   };
@@ -1918,6 +1921,7 @@ test("Panel follows Data Router navigation without navigator.location and unsubs
   const api = vm.runInNewContext(`(() => {
     let nativeNavigator = null, detachNativeNavigation = null, lastNativeLocation = null;
     let active = false, destroyed = false, lastNativeThreadId = "";
+    const panelLocationKeys = new Set(); let pendingPanelNavigation = false;
     const PANEL_ROUTE_STATE = "__codexPanel";
     const normalizeThreadId = (id) => id;
     function showPanel() { active = true; }

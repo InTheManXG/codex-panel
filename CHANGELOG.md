@@ -6,6 +6,12 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Fix Panel immediately closing after Codex updates the current route state, affecting both the sidebar entry and the App’s Open Panel action and causing repeated flicker.
+
+- Keep automatic account name and avatar capture without opening the native profile menu when Panel opens.
+
+- Restore Panel rail icon alignment and inactive color while keeping its selected color. Fix native destination clicks reopening Panel and duplicate icons during selection changes.
+
 - Adapted Panel to the new Codex navigation rail while preserving native titlebar dragging and history; restored compact account identity, unified stacked notifications and Undo, removed redundant Todo comment actions, and fixed Windows Store companion executable caching.
 
 - Remove inherited native sidebar notification dots from the Panel entry so they do not remain permanently visible.

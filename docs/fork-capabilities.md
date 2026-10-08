@@ -138,11 +138,13 @@ The wait duration is fixed. If no main renderer appears within 30 seconds, the l
 
 ## Switch between Panel and native Codex destinations
 
+The rail entry preserves its native icon wrapper and alignment, uses the native inactive text color, and retains its original selected color. Native icons keep one React-owned SVG to avoid duplicate artwork during selection changes. Only history entries created by opening Panel, including their same-URL state replacements, can restore it; cached state copied into a new native destination does not reopen Panel. Clicking the currently selected native destination returns to that page without going back to a different destination.
+
 Panel sidebar mounting also supports Free-account layouts without Plugins or pets. If the existing navigation anchors are absent, Panel uses the visible New chat row inside the main sidebar, with its own icon and keyboard activation. Nested New chat and Quick chat controls remain in their original row; Panel occupies a separate row below it.
 
 The Panel entry appears before Explore in the current Codex navigation rail and retains the sidebar entry on older layouts. It opens from conversations as well as native pages such as Plugins and Sites. Panel remembers every selected project, including **All projects**, and restores it the next time the sidebar entry opens without a `project` query parameter. An explicit `project` query parameter still takes priority. No configuration or migration is required.
 
-Panel fills the workspace beside the navigation rail and below the native titlebar. The native drag region stays available; task-specific header content and the previous selection are hidden while Panel is open and restored when leaving. Compact account menus supply the user name and a bounded WebP avatar for issue activity.
+Panel fills the workspace beside the navigation rail and below the native titlebar. The native drag region stays available; task-specific header content and the previous selection are hidden while Panel is open and restored when leaving. Account identity is read automatically from the existing profile component, visible button text, or an already-open profile menu, without opening or closing that menu. A bounded WebP avatar is retained for issue activity. If identity has not loaded, Panel can still open without it.
 
 Notifications share a stack with Undo actions. Hover or keyboard focus expands the stack and pauses dismissal; swipe a notification to dismiss it. Tasks already in Todo omit the redundant comment status switch. Windows Store installations cache Codex’s companion executables alongside the CLI so code mode and command execution can start.
 

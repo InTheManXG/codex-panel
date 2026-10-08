@@ -135,3 +135,17 @@ test("nested New chat row keeps original actions and mounts Panel as a separate 
     assert.equal(newChats, 1);
   } finally { f.dom.window.close(); }
 });
+
+
+test("rail entry preserves the native icon wrapper and position before Explore", () => {
+  const f = fixture('<aside><nav data-app-navigation-rail><button id="explore"><span class="native-icon-center"><svg class="size-5"></svg></span><span class="sr-only">探索</span></button></nav></aside>');
+  try {
+    const { document } = f.dom.window;
+    const original = document.getElementById("explore").outerHTML;
+    f.api.ensureEntry();
+    const entry = document.getElementById("codex-panel-entry");
+    assert.ok(entry.querySelector(".native-icon-center > svg.size-5"));
+    assert.equal(entry.nextElementSibling.id, "explore");
+    assert.equal(document.getElementById("explore").outerHTML, original);
+  } finally { f.dom.window.close(); }
+});
