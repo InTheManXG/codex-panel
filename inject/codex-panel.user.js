@@ -365,26 +365,54 @@
       && buttonMatches(button.querySelector(".sr-only"), EXPLORE_LABELS)
     ));
     if (explore) return explore;
+    const sidebar = document.querySelector("[data-slate-sidebar-content]");
+    const destinations = Array.from(sidebar?.querySelectorAll("[data-sidebar-destination]") || [])
+      .filter((node) => node.getAttribute(OWNED_ATTRIBUTE) !== "true"
+        && !node.closest("[inert]") && node.getBoundingClientRect().height > 0);
+    if (destinations.length > 0) {
+      return destinations.find((node) => buttonMatches(node, PLUGIN_LABELS)) || destinations.at(-1);
+    }
     const scroll = document.querySelector("[data-app-action-sidebar-scroll]");
-    if (!scroll) return null;
-    const buttons = Array.from(scroll.querySelectorAll("button"))
+    const buttons = Array.from(scroll?.querySelectorAll('button, a.sidebar-item, [role="button"].sidebar-item') || [])
       .filter((button) => button.getAttribute(OWNED_ATTRIBUTE) !== "true");
     const plugin = buttons.find((button) => buttonMatches(button, PLUGIN_LABELS));
     if (plugin) return plugin;
 
-    const firstSection = scroll.querySelector("[data-app-action-sidebar-section]");
-    if (!firstSection) return null;
-    const sectionTop = firstSection.getBoundingClientRect().top;
-    return buttons.filter((button) => {
+    const firstSection = scroll?.querySelector("[data-app-action-sidebar-section]");
+    const sectionTop = firstSection?.getBoundingClientRect().top;
+    const reference = buttons.filter((button) => {
       const rect = button.getBoundingClientRect();
       return rect.height > 0
         && rect.bottom <= sectionTop;
-    }).at(-1) || null;
+    }).at(-1);
+    if (reference) return reference;
+
+    // Free 账号可能没有插件、宠物或 destination 行；仅在主侧边栏内借用新聊天入口。
+    const root = sidebar || document.querySelector("aside");
+    return Array.from(root?.querySelectorAll('button, a, [role="button"]') || [])
+      .find((node) => node.getAttribute(OWNED_ATTRIBUTE) !== "true"
+        && !node.closest("[inert]") && node.getBoundingClientRect().height > 0
+        && buttonMatches(node, ["新聊天", "新对话", "新增聊天", "新對話", "new chat", "new thread"])) || null;
   }
 
   function replaceEntryIcon(button) {
-    const icon = button.querySelector("svg");
-    if (!icon) return;
+    const slot = button.querySelector(".icon-leading-slot");
+    let icon = button.querySelector("svg");
+    // 参考行可能使用宠物头像而非 SVG；清空整个图标槽，避免继承头像与动画。
+    if (slot) {
+      icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("class", "icon-leading");
+      slot.replaceChildren(icon);
+    }
+    // 无独立文字节点的参考行会被替换为纯文字，仍需补上自己的图标。
+    if (!icon) {
+      icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("class", "icon-leading");
+      icon.setAttribute("width", "20");
+      icon.setAttribute("height", "20");
+      button.prepend(icon);
+    }
+    icon.setAttribute("aria-hidden", "true");
     icon.setAttribute("viewBox", "0 0 24 24");
     icon.setAttribute("fill", "none");
     icon.setAttribute("stroke", "currentColor");
@@ -411,6 +439,14 @@
     button.removeAttribute("aria-controls");
     button.removeAttribute("aria-describedby");
     button.removeAttribute("data-state");
+    button.removeAttribute("href");
+    button.removeAttribute("aria-labelledby");
+    button.removeAttribute("aria-current");
+    for (const name of button.getAttributeNames()) {
+      if (name.startsWith("data-app-action-") || name.startsWith("data-sidebar-") || name.startsWith("data-slate-sidebar-")) button.removeAttribute(name);
+    }
+    button.setAttribute("role", "button");
+    button.setAttribute("tabindex", "0");
     button.setAttribute("aria-label", "打开任务面板");
     button.setAttribute("title", "任务面板");
     button.setAttribute(OWNED_ATTRIBUTE, "true");
@@ -418,14 +454,26 @@
     button.querySelectorAll("span.absolute.end-0.top-0").forEach((node) => node.remove());
     const label = button.querySelector(".sr-only") || button.querySelector(".text-fade-truncate")
       || Array.from(button.querySelectorAll("span")).find((node) => buttonMatches(node, PLUGIN_LABELS));
-    if (label) label.textContent = "任务面板";
-    else button.textContent = "任务面板";
+    if (label) {
+      label.textContent = "任务面板";
+      // 只复用图标和文字的样式；原生入口的提示点没有 Panel 状态来源，复制后会常驻。
+      const icon = button.querySelector(".icon-leading-slot") || button.querySelector("svg");
+      button.replaceChildren(...(icon ? [icon, label] : [label]));
+    } else button.textContent = "任务面板";
     replaceEntryIcon(button);
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
       openPanel();
     });
+    if (button.tagName !== "BUTTON") {
+      button.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        button.click();
+      });
+    }
     return button;
   }
 
@@ -446,19 +494,33 @@
     installStyles();
     const reference = findReferenceButton();
     if (!reference?.parentElement) return;
+    // 新聊天按钮可能只是横向行的一部分；在整行之后挂载，不能挤入快速聊天所在的行内。
+    const row = reference.parentElement.closest(".sidebar-item") || reference;
     if (!entry) entry = createEntry(reference);
-    if (entry.parentElement !== reference.parentElement || entry.nextElementSibling !== reference) {
-      reference.before(entry);
+    entry.style.height = row !== reference ? "var(--nav-item-height, var(--height-token-row, 36px))" : "";
+    entry.style.flex = row !== reference ? "none" : "";
+    entry.style.width = row !== reference ? "100%" : "";
+    if (reference.closest("nav[data-app-navigation-rail]")) {
+      if (entry.parentElement !== reference.parentElement || entry.nextElementSibling !== reference) {
+        reference.before(entry);
+      }
+    } else if (entry.parentElement !== row.parentElement || entry.previousElementSibling !== row) {
+      row.after(entry);
     }
     syncEntryState();
   }
 
   function findPageHost() {
-    const direct = document.querySelector(".app-shell-main-content-frame");
-    if (direct?.closest?.("[data-app-shell-main-content-layout]")) return direct;
-
-    const viewport = document.querySelector("[data-app-shell-main-content-layout]");
+    // 新版 Codex 保留多个隐藏工作区；面板打开后原内容被隐藏，继续复用已挂载的区域。
+    const viewport = Array.from(document.querySelectorAll("[data-app-shell-main-content-layout]"))
+      .find((candidate) => {
+        const rect = candidate.getBoundingClientRect();
+        return (rect.width > 0 && rect.height > 0)
+          || (page?.isConnected && page.parentElement === candidate.parentElement);
+      });
     if (!viewport) return null;
+    const direct = viewport.querySelector(".app-shell-main-content-frame");
+    if (direct) return direct;
     const viewportRect = viewport.getBoundingClientRect();
     return Array.from(viewport.children).find((candidate) => {
       const rect = candidate.getBoundingClientRect();
@@ -2482,6 +2544,21 @@
     // Do not call listen(): memory history has a single listener owned by React.
     for (let fiber = surface?.[fiberKey]; fiber; fiber = fiber.return) {
       const props = fiber.memoizedProps;
+      // 新版 Data Router 的 navigator 没有 location；通过 router 的状态与订阅跟随原生导航。
+      const router = props?.router || props?.value?.router;
+      if (router?.state?.location && typeof router.navigate === "function" && typeof router.subscribe === "function") {
+        nativeNavigator = {
+          get location() { return router.state.location; },
+          push(path, state) { return router.navigate(path, { state }); },
+          go(delta) { return router.navigate(delta); },
+        };
+        const unsubscribe = router.subscribe(syncNativeNavigation);
+        detachNativeNavigation = () => {
+          unsubscribe();
+          nativeNavigator = null;
+        };
+        return true;
+      }
       const navigator = props?.navigator || props?.value?.navigator;
       if (!navigator?.location || !["push", "replace", "go"].every((name) => typeof navigator[name] === "function")) continue;
       nativeNavigator = navigator;

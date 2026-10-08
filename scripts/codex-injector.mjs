@@ -217,7 +217,12 @@ function parseArgs(argv) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url);
+  let response;
+  try {
+    response = await fetch(url, { signal: AbortSignal.timeout(3_000) });
+  } catch (error) {
+    throw new Error(`无法连接 Codex 调试端口 ${new URL(url).port}（${error.cause?.code || error.name}）。直接打开 Codex 可能未开启调试端口。请先保存工作，再在 Panel 点击“重启服务”，按提示重启 Codex；以后请从 Codex Panel 启动 Codex。`, { cause: error });
+  }
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
   return response.json();
 }
@@ -614,6 +619,13 @@ async function codexTargets(port) {
 }
 
 function isCodexTarget(target) {
+  try {
+    const url = new URL(target.url);
+    const route = url.searchParams.get("initialRoute") || "";
+    if (url.pathname === "/detached-window.html" || route === "/detached-window" || route.startsWith("/detached-window/")) return false;
+  } catch {
+    return false;
+  }
   return (
       target.type === "page" &&
       !target.url?.includes("initialRoute=%2Fglobal-dictation") &&
@@ -707,8 +719,10 @@ function codexDebuggingPorts(preferredPort) {
 
 async function discoverCodexPort(preferredPort) {
   for (const candidate of codexDebuggingPorts(preferredPort)) {
-    if (!(await isReachable(`http://127.0.0.1:${candidate}/json/version`))) continue;
-    if ((await codexTargets(candidate)).length > 0) return candidate;
+    try {
+      if (!(await isReachable(`http://127.0.0.1:${candidate}/json/version`))) continue;
+      if ((await codexTargets(candidate)).length > 0) return candidate;
+    } catch {}
   }
   return null;
 }
@@ -2496,8 +2510,11 @@ async function injectTarget(
       const frameLoaded = status.frameUrl
         ? await waitForFrame(cdp, status.frameUrl, 15_000)
         : false;
-      if (reconciled.shouldRemainOpen && (!status.pageVisible || !status.frameReady || !frameLoaded)) {
-        throw new Error("Panel frame did not report ready in the Codex renderer");
+      if (status.entryMounted !== true || status.sourceHash !== sourceHash) {
+        throw new Error("Panel 入口尚未挂载：Codex 侧边栏尚未就绪或布局不兼容。调试连接已成功，请保留当前窗口并查看日志。");
+      }
+      if (shouldRemainOpen && (!status.pageVisible || !status.frameReady || !frameLoaded)) {
+        throw new Error("Codex 中的任务面板尚未就绪，请稍后重试。");
       }
       retained = true;
       return {
@@ -2530,8 +2547,11 @@ async function injectTarget(
     const frameLoaded = status.frameUrl
       ? await waitForFrame(cdp, status.frameUrl, 15_000)
       : false;
+    if (status.entryMounted !== true || status.sourceHash !== sourceHash) {
+      throw new Error("Panel 入口尚未挂载：Codex 侧边栏尚未就绪或布局不兼容。调试连接已成功，请保留当前窗口并查看日志。");
+    }
     if (shouldOpen && (!status.pageVisible || !status.frameReady || !frameLoaded)) {
-      throw new Error("Panel frame did not report ready in the Codex renderer");
+      throw new Error("Codex 中的任务面板尚未就绪，请稍后重试。");
     }
     const result = {
       ...status,
@@ -2570,10 +2590,6 @@ async function injectAll(
   onCodexAppServerUnavailable,
 ) {
   const targets = await runtime.targets();
-  if (targets.length === 0) {
-    if (keepAlive) return [];
-    throw new Error("No Codex renderer target found");
-  }
 
   const activeIds = new Set(targets.map((target) => target.id));
   for (const [id, connection] of injectedTargets) {
@@ -2583,6 +2599,10 @@ async function injectAll(
       connection.close();
       injectedTargets.delete(id);
     }
+  }
+
+  if (targets.length === 0) {
+    throw new Error("已连接 Codex 调试端口，但未找到可挂载面板的主窗口。请打开包含项目侧边栏的 Codex 主窗口；分离聊天窗口不支持面板。");
   }
 
   const results = [];
@@ -2675,7 +2695,7 @@ async function main() {
   if (!options.cdpPipe && options.launch && options.attachExisting) {
     options.port = await discoverCodexPort(options.port) ?? options.port;
   }
-  const cdpVersionUrl = `http://127.0.0.1:${options.port}/json/version`;
+  let cdpVersionUrl = `http://127.0.0.1:${options.port}/json/version`;
 
   if (options.stopManaged) {
     if (!panelRuntimeFile) throw new Error("--stop-managed requires CODEX_PANEL_RUNTIME_FILE");
@@ -3081,13 +3101,19 @@ async function main() {
       console.error(
         "Waiting for Codex: the running app has no debugging port; Panel service remains available.",
       );
-      emitLauncherEvent("waitingForCodex");
+      emitLauncherEvent("waitingForCodex", { message: "Codex 已运行，但 Panel 无法连接它的调试端口。请先保存工作，再在 Panel 点击“重启服务”，按提示重启 Codex；以后请从 Codex Panel 启动 Codex。" });
       while (!stopping && codexIsRunning()) {
         await Promise.race([
           new Promise((resolve) => setTimeout(resolve, 500)),
           stopRequested,
         ]);
         if (!stopping) {
+          const discoveredPort = await discoverCodexPort(options.port);
+          if (discoveredPort !== null) {
+            options.port = discoveredPort;
+            cdpVersionUrl = `http://127.0.0.1:${options.port}/json/version`;
+            break;
+          }
           try {
             await supervisor.ensure();
           } catch (error) {
@@ -3144,7 +3170,7 @@ async function main() {
     } catch (error) {
       if (!options.watch) throw error;
       console.error(`Waiting for Codex renderer: ${error.message}`);
-      emitLauncherEvent("waitingForCodex");
+      emitLauncherEvent("waitingForCodex", { message: error.message });
     }
     if (firstResults.length > 0) {
       if (shouldOpenFirstTarget) {
@@ -3222,6 +3248,30 @@ async function main() {
         }
       }
       try {
+        if (!options.cdpPipe && options.attachExisting && !(await isReachable(cdpVersionUrl))) {
+          const discoveredPort = await discoverCodexPort(options.port);
+          if (discoveredPort !== null) {
+            for (const connection of injectedTargets.values()) {
+              unregisterRoutableCodexConnection(connection);
+              unregisterQuotaPolicyCdp(connection);
+              connection.close();
+            }
+            injectedTargets.clear();
+            cdpRuntime?.close();
+            options.port = discoveredPort;
+            cdpVersionUrl = `http://127.0.0.1:${options.port}/json/version`;
+            cdpRuntime = tcpCdpRuntime(options.port);
+            codexProcess = null;
+            console.error(`Reconnected to Codex debugging port ${options.port}`);
+            if (panelRuntimeFile && options.startupToken) {
+              await publishInjectorRuntime(panelRuntimeFile, {
+                pid: process.pid, url: panelBaseUrl,
+                controlSocket: injectorControlSocketPath(panelRuntimeFile, options.startupToken),
+                startupToken: options.startupToken, transport: "tcp", port: options.port,
+              });
+            }
+          }
+        }
         const results = await injectAll(
           cdpRuntime,
           source,
@@ -3322,7 +3372,7 @@ async function main() {
           continue;
         }
         console.error(`Waiting for Codex renderer: ${error.message}`);
-        emitLauncherEvent("waitingForCodex");
+        emitLauncherEvent("waitingForCodex", { message: error.message });
       }
     }
   } finally {

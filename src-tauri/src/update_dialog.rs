@@ -81,8 +81,17 @@ pub(super) struct UpdateDialog {
 
 #[cfg(target_os = "macos")]
 impl UpdateDialog {
-    pub(super) fn prompt(_app: &AppHandle, version: &str) -> Option<Self> {
+    pub(super) fn prompt(app: &AppHandle, version: &str) -> Option<Self> {
         let message = format!("{version} 已下载并通过签名验证。是否安装并重启 Codex Panel？");
+        Self::prompt_message(app, "Codex Panel 更新", message, "安装并重启")
+    }
+
+    fn prompt_message(
+        _app: &AppHandle,
+        title: &'static str,
+        message: String,
+        confirm: &'static str,
+    ) -> Option<Self> {
         let (response, result) = std::sync::mpsc::channel();
         let dialog = run_on_main(move |mtm| {
             let alert = NSAlert::new(mtm);
@@ -94,9 +103,9 @@ impl UpdateDialog {
             progress_indicator.setFrameSize(NSSize::new(280.0, 20.0));
             progress_indicator.sizeToFit();
             progress_indicator.setDisplayedWhenStopped(true);
-            alert.setMessageText(&NSString::from_str("Codex Panel 更新"));
+            alert.setMessageText(&NSString::from_str(title));
             alert.setInformativeText(&NSString::from_str(&message));
-            let install_button = alert.addButtonWithTitle(&NSString::from_str("安装并重启"));
+            let install_button = alert.addButtonWithTitle(&NSString::from_str(confirm));
             let defer_button = alert.addButtonWithTitle(&NSString::from_str("稍后"));
             unsafe {
                 install_button.setTarget(Some(&target));
@@ -168,13 +177,25 @@ pub(super) struct UpdateDialog;
 #[cfg(not(target_os = "macos"))]
 impl UpdateDialog {
     pub(super) fn prompt(app: &AppHandle, version: &str) -> Option<Self> {
+        Self::prompt_message(
+            app,
+            "Codex Panel 更新",
+            format!("{version} 已下载并通过签名验证。是否安装并重启 Codex Panel？"),
+            "安装并重启",
+        )
+    }
+
+    fn prompt_message(
+        app: &AppHandle,
+        title: &'static str,
+        message: String,
+        confirm: &'static str,
+    ) -> Option<Self> {
         app.dialog()
-            .message(format!(
-                "{version} 已下载并通过签名验证。是否安装并重启 Codex Panel？"
-            ))
-            .title("Codex Panel 更新")
+            .message(message)
+            .title(title)
             .buttons(MessageDialogButtons::OkCancelCustom(
-                "安装并重启".into(),
+                confirm.into(),
                 "稍后".into(),
             ))
             .blocking_show()
@@ -184,4 +205,17 @@ impl UpdateDialog {
     pub(super) fn show_installing(&self, _message: &str) {}
 
     pub(super) fn close(&self) {}
+}
+
+impl UpdateDialog {
+    pub(super) fn confirm_codex_restart(app: &AppHandle) -> bool {
+        // 复用可置前的原生确认框，避免后台启动器的 Tauri 弹窗不可见而卡住恢复。
+        let Some(dialog) = Self::prompt_message(app, "需要重启 Codex",
+            "Codex 已经更新，请点击下方按钮重新启动".into(),
+            "重启 Codex 并连接") else {
+            return false;
+        };
+        dialog.close();
+        true
+    }
 }

@@ -137,7 +137,10 @@ struct RendererStatus {
 #[derive(Deserialize)]
 #[serde(tag = "launcherEvent", rename_all = "camelCase")]
 enum LauncherEvent {
-    WaitingForCodex,
+    WaitingForCodex {
+        #[serde(default)]
+        message: Option<String>,
+    },
     ServiceReady,
     OpenSignalReady,
     PanelOpened,
@@ -1046,8 +1049,14 @@ fn verify_windows_launcher_signature() -> Result<(), String> {
 #[cfg(target_os = "macos")]
 fn verify_codex_app(path: &Path) -> Result<(), String> {
     verify_signed_component(path, "com.openai.codex", "2DC432GLL2", true)?;
+    let packaged = path.join("Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex");
+    let executable = if packaged.exists() {
+        packaged
+    } else {
+        path.join("Contents/Resources/codex")
+    };
     verify_signed_component(
-        &path.join("Contents/Resources/codex"),
+        &executable,
         "codex",
         "2DC432GLL2",
         false,
@@ -1155,6 +1164,7 @@ fn status_menu_label(phase: &str) -> &'static str {
     match phase {
         "running" => "运行状态：正常",
         "waiting" => "运行状态：等待 Codex",
+        "restart_required" => "运行状态：需要重启 Codex",
         "error" => "运行状态：异常",
         "stopped" => "运行状态：已停止",
         _ => "运行状态：启动中",
@@ -1580,8 +1590,19 @@ fn apply_renderer_status(snapshot: &mut LauncherSnapshot, pid: u32, status: Rend
 }
 
 fn apply_waiting_for_codex(snapshot: &mut LauncherSnapshot) {
+    // 连接轮询仍会报告旧端口错误；不要覆盖已确认的恢复入口。
+    if snapshot.phase == "restart_required" {
+        return;
+    }
     snapshot.phase = "waiting".into();
     snapshot.message = "Panel 服务已启动，正在等待 Codex 连接。".into();
+    snapshot.embedded_visible = false;
+}
+
+fn apply_codex_restart_required(snapshot: &mut LauncherSnapshot) {
+    snapshot.phase = "restart_required".into();
+    snapshot.message = "Codex 已经更新，请点击下方按钮重新启动".into();
+    snapshot.open_signal_pid = None;
     snapshot.embedded_visible = false;
 }
 
@@ -1600,9 +1621,27 @@ fn monitor_renderer_readiness(
             return;
         }
         let status = query_renderer_status(&state);
+        // 更新器可能以普通方式重开 Codex。按实际启动参数检测，不绑定版本号，
+        // 也不自动退出用户正在工作的 Codex；仅在状态首次变化时显示管理窗口。
+        #[cfg(target_os = "macos")]
+        let restart_required = !status.ready && {
+            let app_path = state.snapshot.lock().unwrap().app_path.clone();
+            app_path.as_deref().is_some_and(|path| {
+                ordinary_codex_process(Path::new(path))
+                    .ok()
+                    .flatten()
+                    .is_some()
+            })
+        };
+        #[cfg(not(target_os = "macos"))]
+        let restart_required = false;
         let needs_update = {
             let snapshot = state.snapshot.lock().unwrap();
-            if status.ready {
+            if restart_required {
+                snapshot.phase != "restart_required"
+            } else if snapshot.phase == "restart_required" {
+                true
+            } else if status.ready {
                 snapshot.phase != "running"
                     || snapshot.open_signal_pid != Some(pid)
                     || snapshot.embedded_visible != status.page_visible
@@ -1613,13 +1652,24 @@ fn monitor_renderer_readiness(
             }
         };
         if needs_update {
-            update_snapshot(&app, &state, |snapshot| {
+            let snapshot = update_snapshot(&app, &state, |snapshot| {
                 if state.generation.load(Ordering::SeqCst) == generation
                     && snapshot.child_pid == Some(pid)
                 {
-                    apply_renderer_status(snapshot, pid, status);
+                    if restart_required {
+                        apply_codex_restart_required(snapshot);
+                    } else {
+                        if snapshot.phase == "restart_required" {
+                            snapshot.phase = "waiting".into();
+                            apply_waiting_for_codex(snapshot);
+                        }
+                        apply_renderer_status(snapshot, pid, status);
+                    }
                 }
             });
+            if restart_required && snapshot.phase == "restart_required" {
+                let _ = show_main_window(&app);
+            }
         }
         #[cfg(target_os = "macos")]
         if status.ready && state.snapshot.lock().unwrap().open_request_pending {
@@ -1938,7 +1988,15 @@ fn watch_launcher_output<R: std::io::Read + Send + 'static>(
                     return;
                 }
                 match event {
-                    LauncherEvent::WaitingForCodex | LauncherEvent::ServiceReady => {
+                    LauncherEvent::WaitingForCodex { message } => {
+                        apply_waiting_for_codex(snapshot);
+                        if let Some(message) = message.filter(|value| {
+                            snapshot.phase != "restart_required" && !value.trim().is_empty()
+                        }) {
+                            snapshot.message = message;
+                        }
+                    }
+                    LauncherEvent::ServiceReady => {
                         apply_waiting_for_codex(snapshot);
                     }
                     LauncherEvent::OpenSignalReady => {
@@ -1981,6 +2039,30 @@ fn watch_launcher_output<R: std::io::Read + Send + 'static>(
     });
 }
 
+fn confirm_ordinary_codex_restart(
+    app: &AppHandle,
+    state: &LauncherState,
+    codex_app: &Path,
+) -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    let ordinary_codex_pid = ordinary_codex_process(codex_app)?;
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let ordinary_codex_pid =
+        ordinary_codex_process(codex_app, &state.data_directory.join("codex-profile"))?;
+    if let Some(codex_pid) = ordinary_codex_pid {
+        if !UpdateDialog::confirm_codex_restart(app) {
+            append_log(state, "Codex restart deferred by user");
+            return Ok(false);
+        }
+        append_log(
+            state,
+            &format!("Requesting normal Codex exit for PID {codex_pid}"),
+        );
+        quit_codex_normally(codex_pid)?;
+    }
+    Ok(true)
+}
+
 fn start_launcher_locked(
     app: &AppHandle,
     state: &Arc<LauncherState>,
@@ -2019,38 +2101,14 @@ fn start_launcher_locked(
     verify_launcher_runtime(&resource_directory, &node_path)?;
     stop_recorded_child(state);
     let codex_profile = state.data_directory.join("codex-profile");
-    #[cfg(target_os = "macos")]
-    let ordinary_codex_pid = ordinary_codex_process(&codex_app)?;
-    #[cfg(target_os = "windows")]
-    let ordinary_codex_pid = ordinary_codex_process(&codex_app, &codex_profile)?;
-    #[cfg(target_os = "linux")]
-    let ordinary_codex_pid = ordinary_codex_process(&codex_app, &codex_profile)?;
-    if let Some(codex_pid) = ordinary_codex_pid {
-        let restart = app
-            .dialog()
-            .message("需要重新启动 Codex 才能显示任务面板")
-            .title("Codex Panel")
-            .kind(MessageDialogKind::Info)
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "重新启动 Codex".into(),
-                "取消".into(),
-            ))
-            .blocking_show();
-        if !restart {
-            append_log(state, "Codex restart canceled by user");
-            return Ok(update_snapshot(app, state, |snapshot| {
-                snapshot.phase = "stopped".into();
-                snapshot.message = "已取消重新启动 Codex，任务面板未注入。".into();
-                snapshot.app_path = Some(codex_app.display().to_string());
-                snapshot.open_signal_pid = None;
-                snapshot.open_request_pending = false;
-            }));
-        }
-        append_log(
-            state,
-            &format!("Requesting normal Codex exit for PID {codex_pid}"),
-        );
-        quit_codex_normally(codex_pid)?;
+    if !confirm_ordinary_codex_restart(app, state, &codex_app)? {
+        return Ok(update_snapshot(app, state, |snapshot| {
+            snapshot.phase = "stopped".into();
+            snapshot.message = "已取消重新启动 Codex，任务面板未注入。".into();
+            snapshot.app_path = Some(codex_app.display().to_string());
+            snapshot.open_signal_pid = None;
+            snapshot.open_request_pending = false;
+        }));
     }
     let generation = state.generation.fetch_add(1, Ordering::SeqCst) + 1;
     state.intentional_stop.store(false, Ordering::SeqCst);
@@ -2331,9 +2389,20 @@ fn restart_launcher(
         if state.update_installing.load(Ordering::SeqCst) {
             return Err("正在安装更新，请稍候。".into());
         }
+        // 先确认再停止服务；选择“稍后”仍保留 Panel 数据服务和自动重连。
+        let home_directory = app.path().home_dir().map_err(|error| error.to_string())?;
+        let codex_app = find_codex_app(&home_directory).ok_or_else(missing_codex_app_message)?;
+        verify_codex_app(&codex_app)?;
+        let should_open = {
+            let snapshot = state.snapshot.lock().unwrap();
+            snapshot.phase == "restart_required" || snapshot.open_request_pending
+        };
+        if !confirm_ordinary_codex_restart(app, state, &codex_app)? {
+            return Ok(state.snapshot.lock().unwrap().clone());
+        }
         stop_managed_child_locked(app, state);
         reset_recovery(state);
-        let result = start_launcher_locked(app, state, false);
+        let result = start_launcher_locked(app, state, should_open);
         if result.is_err() {
             state.intentional_stop.store(false, Ordering::SeqCst);
         }
@@ -3434,6 +3503,27 @@ mod tests {
         assert_eq!(snapshot.phase, "waiting");
         assert_eq!(snapshot.open_signal_pid, None);
         assert!(snapshot.open_request_pending);
+
+        // 更新后的普通进程需要用户确认；后续轮询不能把提示冲掉。
+        super::apply_codex_restart_required(&mut snapshot);
+        assert_eq!(snapshot.phase, "restart_required");
+        assert_eq!(status_menu_label(&snapshot.phase), "运行状态：需要重启 Codex");
+        apply_waiting_for_codex(&mut snapshot);
+        apply_renderer_status(&mut snapshot, 42, RendererStatus::default());
+        assert_eq!(snapshot.phase, "restart_required");
+        assert_eq!(snapshot.message, "Codex 已经更新，请点击下方按钮重新启动");
+        assert_eq!(snapshot.open_signal_pid, None);
+        assert!(snapshot.open_request_pending);
+        apply_renderer_status(
+            &mut snapshot,
+            42,
+            RendererStatus {
+                ready: true,
+                page_visible: true,
+            },
+        );
+        assert_eq!(snapshot.phase, "running");
+        assert!(snapshot.embedded_visible);
     }
 
     #[test]

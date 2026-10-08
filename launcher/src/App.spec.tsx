@@ -101,6 +101,19 @@ it("keeps launcher feedback, live status and global preferences working through 
   await advance(1);
   expect(button("restartService").classList.contains("is-success")).toBe(true);
 
+  // 更新丢失启动参数时，即使此前排队打开面板，恢复按钮也必须可点击。
+  await publish({ phase: "restart_required", openRequestPending: true, message: "Codex 已经更新，请点击下方按钮重新启动" });
+  expect(screen.getByRole("button", { name: "重启 Codex 并连接" })).toBeTruthy();
+  expect(button("panelAction").disabled).toBe(false);
+  const recoveryCount = invoke.mock.calls.filter(([command]) => command === "reconnect_codex").length;
+  await click(button("panelAction"));
+  expect(invoke.mock.calls.filter(([command]) => command === "reconnect_codex")).toHaveLength(recoveryCount + 1);
+  await act(async () => { finishRestart(); });
+  await advance(300);
+  expect(button("panelAction").disabled).toBe(false);
+  await publish({ phase: "running", openRequestPending: false });
+  expect(button("panelAction").getAttribute("aria-label")).toBe("打开面板");
+
   holdRefresh = true;
   await click(button("refresh"));
   expect(button("refresh").classList.contains("is-busy")).toBe(true);

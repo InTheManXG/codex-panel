@@ -245,7 +245,7 @@ test("entry clones the native Explore rail button and the page covers the comple
 
   assert.match(source, /const button = reference\.cloneNode\(true\)/);
   assert.match(source, /reference\.before\(entry\)/);
-  assert.match(source, /document\.querySelector\("\.app-shell-main-content-frame"\)/);
+  assert.match(source, /viewport\.querySelector\("\.app-shell-main-content-frame"\)/);
   assert.match(source, /const workspace = viewport\?\.closest\("\[data-app-shell-workspace-row\]"\)/);
   assert.match(source, /surface\.appendChild\(page\)/);
   assert.match(source, /#\$\{PAGE_ID\} \{[\s\S]*?top: var\(--app-shell-titlebar-height, 0px\);/);
@@ -268,7 +268,7 @@ test("entry recognizes the Explore rail labels", () => {
   );
   let currentButtons;
   const rail = {
-    querySelectorAll: (selector) => selector === "button" ? currentButtons : [],
+    querySelectorAll: (selector) => selector.startsWith("button") ? currentButtons : [],
   };
   const findReferenceButton = vm.runInNewContext(`(() => {
     const EXPLORE_LABELS = ["探索", "explore"];
@@ -1811,19 +1811,21 @@ test("conversation content frames can host Panel when they include the native he
   };
   const viewport = {
     children: [conversationFrame],
+    querySelector: () => null,
     getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
   };
   const nativeHeader = {
     getBoundingClientRect: () => ({ bottom: 48 }),
   };
   const document = {
+    querySelectorAll: () => [{ getBoundingClientRect: () => ({ width: 0, height: 0 }) }, viewport],
     querySelector: (selector) => {
       if (selector === "[data-app-shell-main-content-layout]") return viewport;
       if (selector === "main > header") return nativeHeader;
       return null;
     },
   };
-  const findPageHost = vm.runInNewContext(`(${findPageHostSource})`, { document });
+  const findPageHost = vm.runInNewContext(`(${findPageHostSource})`, { document, page: null });
 
   assert.equal(findPageHost().kind, "conversation-frame");
 });
@@ -1850,7 +1852,7 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
   let currentSection;
   const scroll = {
     querySelector: (selector) => selector === "[data-app-action-sidebar-section]" ? currentSection : null,
-    querySelectorAll: (selector) => selector === "button" ? currentButtons : [],
+    querySelectorAll: (selector) => selector.startsWith("button") ? currentButtons : [],
   };
   const findReferenceButton = vm.runInNewContext(`(() => {
     const EXPLORE_LABELS = ["探索", "explore"];
@@ -1860,7 +1862,7 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
     ${referenceSource}
     return findReferenceButton;
   })()`, {
-    document: { querySelector: (selector) => selector === "nav[data-app-navigation-rail]" ? null : scroll },
+    document: { querySelector: (selector) => selector === "[data-app-action-sidebar-scroll]" ? scroll : null },
   });
 
   for (const textContent of ["插件", "外掛程式", "プラグイン", "Plugins"]) {
@@ -1890,4 +1892,75 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
   ];
   currentSection = { getBoundingClientRect: () => ({ top: 200 }) };
   assert.equal(findReferenceButton(), unenumeratedPlugin);
+});
+
+test("Panel follows Data Router navigation without navigator.location and unsubscribes", async () => {
+  const entries = [{ pathname: "/local/task-1", search: "", hash: "", state: null }];
+  let index = 0;
+  const listeners = new Set();
+  const router = {
+    get state() { return { location: entries[index] }; },
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    async navigate(path, options) {
+      // 模拟新版导航异步提交，不能把调用 navigate 当成页面已经切换。
+      await Promise.resolve();
+      if (typeof path === "number") index += path;
+      else entries.splice(++index, entries.length, { ...path, state: options?.state });
+      listeners.forEach((listener) => listener(router.state));
+    },
+  };
+  const surface = { __reactFiber$fixture: {
+    memoizedProps: { navigator: { push() {}, replace() {}, go() {} } },
+    return: { memoizedProps: { router }, return: null },
+  } };
+  const start = source.indexOf("  function connectNativeNavigation()");
+  const end = source.indexOf("  function scheduleRefresh()", start);
+  const api = vm.runInNewContext(`(() => {
+    let nativeNavigator = null, detachNativeNavigation = null, lastNativeLocation = null;
+    let active = false, destroyed = false, lastNativeThreadId = "";
+    const PANEL_ROUTE_STATE = "__codexPanel";
+    const normalizeThreadId = (id) => id;
+    function showPanel() { active = true; }
+    function closePanel() { active = false; }
+    function publishPendingThreadAssociation() {}
+    ${source.slice(start, end)}
+    return { openPanel, leavePanel, visible: () => active, detach: () => detachNativeNavigation() };
+  })()`, { document: { querySelector: () => surface } });
+  api.openPanel();
+  assert.equal(api.visible(), false);
+  await Promise.resolve();
+  assert.equal(api.visible(), true);
+  api.openPanel();
+  assert.equal(entries.length, 2);
+  api.leavePanel();
+  await Promise.resolve();
+  assert.equal(api.visible(), false);
+  await router.navigate(1);
+  assert.equal(api.visible(), true);
+  await router.navigate({ pathname: "/automations", search: "", hash: "" });
+  assert.equal(api.visible(), false);
+  api.detach();
+  assert.equal(listeners.size, 0);
+});
+
+test("Panel replaces a cloned pet avatar with its own board icon", async () => {
+  const { JSDOM } = await import("jsdom");
+  const dom = new JSDOM('<button><span class="icon-leading-slot"><div data-codex-pet-id="pet" style="background-image:url(pet.png)"></div></span><span>任务面板</span></button>');
+  try {
+    const { document } = dom.window;
+    const start = source.indexOf("  function replaceEntryIcon(");
+    const end = source.indexOf("  function createEntry(", start);
+    const replaceIcon = vm.runInNewContext(`(${source.slice(start, end).trim()})`, { document });
+    const button = document.querySelector("button");
+    replaceIcon(button);
+    assert.equal(button.querySelector("[data-codex-pet-id]"), null);
+    assert.equal(button.querySelector("svg").namespaceURI, "http://www.w3.org/2000/svg");
+    assert.equal(button.querySelector("svg").getAttribute("aria-hidden"), "true");
+    assert.equal(button.querySelectorAll("svg rect, svg path").length, 3);
+    replaceIcon(button);
+    assert.equal(button.querySelectorAll("svg").length, 1);
+    assert.equal(button.textContent.trim(), "任务面板");
+  } finally {
+    dom.window.close();
+  }
 });
