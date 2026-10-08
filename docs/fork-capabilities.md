@@ -1,5 +1,9 @@
 # Fork capabilities
 
+On macOS, Panel detects Codex restarts that lost connection arguments, offers **重启 Codex 并连接**, and requires confirmation before restarting Codex. See [update recovery](codex-compatibility.md#recovery-after-desktop-updates).
+
+For the 2026-09-30 desktop/CLI compatibility target, packaged macOS executable layout, new model options, and validation limits, see [Codex compatibility](codex-compatibility.md).
+
 Panel participates in Codex’s native navigation history: Back returns to the page before Panel, Forward reopens Panel, and navigating from Panel to a native destination adds that destination to the same history. Route changes control visibility without matching button or command labels; utility actions that do not navigate leave Panel open.
 
 
@@ -82,6 +86,8 @@ This identifies account and workspace exhausted-usage banners by their React com
 
 ### Custom-provider send availability
 
+On reinjection, the adapter also discovers the original composer URL from existing import maps, so blob loading does not remove its adaptation.
+
 ChatGPT desktop **26.917.51856 and 26.917.71314** can disable the local Codex composer when the signed-in ChatGPT account is out of usage, even when Codex sends to a custom model provider. Panel adapts the native composer to check the thread provider first, then the native model configuration. For a known local provider other than `openai`, the two ChatGPT account quota conditions no longer disable the native Send button, keyboard submission, or submit handler. Other blockers, such as empty input and pending uploads, still apply. OpenAI account quotas, remote execution, login state, credentials, and backend limits are unchanged.
 
 Open **偏好设置 → 显示与系统** and enable **移除账号额度不足时 API 发送限制** (Remove API send restrictions caused by insufficient account quota). This saved switch defaults to off and is independent of banner visibility. Panel installs the adapter on first connection, including when the switch is off, and reloads the Codex interface once to load it. Later changes apply immediately in the same page: saving the preference triggers the existing host connection to update a React subscription, so the Send button and submission handler recalculate without a service restart or page refresh. Drafts remain intact. Turning the switch off immediately restores the original quota checks. If the service is stopped, the setting applies on its next start. Reinstalling or upgrading the adapter can require loading its new code again. An import map replaces only the supported composer module in memory, without writing to the installed application. Its dependency URLs and `import.meta.url` retain their original values. Panel discovers the current `app-primary-*.js` URL from loaded resources or module tags, then identifies the composer, submission gate, React hooks and native provider reader by their code structure. Asset hashes and minified symbol names do not need version entries. The previously verified `app-primary-aaee46b7f0ce.js` adapter remains available for the older source layout. Changed or ambiguous code structures keep native behavior and produce an unavailable-adapter log. Structural matching is not a guarantee of compatibility with every future release. Stopping the injector and reloading the client restores the original script.
@@ -131,6 +137,8 @@ CODEX_PANEL_HOST=127.0.0.1 npm run codex
 The wait duration is fixed. If no main renderer appears within 30 seconds, the launcher exits with `Timed out waiting for a Codex renderer target`.
 
 ## Switch between Panel and native Codex destinations
+
+Panel sidebar mounting also supports Free-account layouts without Plugins or pets. If the existing navigation anchors are absent, Panel uses the visible New chat row inside the main sidebar, with its own icon and keyboard activation. Nested New chat and Quick chat controls remain in their original row; Panel occupies a separate row below it.
 
 The Panel sidebar entry opens from conversations as well as native pages such as Plugins and Sites. Panel remembers every selected project, including **All projects**, and restores it the next time the sidebar entry opens without a `project` query parameter. An explicit `project` query parameter still takes priority. No configuration or migration is required.
 

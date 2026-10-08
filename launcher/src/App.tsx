@@ -28,8 +28,8 @@ export type TauriBridge = {
 };
 declare global { interface Window { __TAURI__: TauriBridge } }
 
-const labels: Record<string, string> = { running: "运行正常", waiting: "等待 Codex", error: "运行异常", stopped: "已停止", starting: "启动中" };
-const titles: Record<string, string> = { running: "Panel 已就绪", waiting: "服务已启动", error: "服务需要处理", stopped: "服务已停止", starting: "正在建立连接" };
+const labels: Record<string, string> = { running: "运行正常", waiting: "等待 Codex", restart_required: "需要重启 Codex", error: "运行异常", stopped: "已停止", starting: "启动中" };
+const titles: Record<string, string> = { running: "Panel 已就绪", waiting: "服务已启动", restart_required: "需要重启 Codex", error: "服务需要处理", stopped: "服务已停止", starting: "正在建立连接" };
 const initialSnapshot: LauncherSnapshot = {
   phase: "starting", version: "—", message: "正在读取服务状态…", childPid: null,
   embeddedVisible: false, openRequestPending: false, updateMessage: "尚未检查更新。",
@@ -62,9 +62,10 @@ export function App() {
   const preferences = state?.preferences;
   const hasProcess = snapshot.childPid !== null && snapshot.childPid !== undefined;
   const ready = snapshot.phase === "running";
+  const needsRestart = snapshot.phase === "restart_required";
   const needsStart = snapshot.phase === "stopped" || snapshot.phase === "error";
   const opening = !needsStart && snapshot.openRequestPending && ready;
-  const queued = !needsStart && snapshot.openRequestPending && !ready;
+  const queued = !needsStart && !needsRestart && snapshot.openRequestPending && !ready;
   const panelLabel = needsStart
     ? "启动服务并打开"
     : opening
@@ -78,6 +79,11 @@ export function App() {
             : "打开面板";
 
   const [followSystemAppearance, setFollowSystemAppearance] = useState(() => window.localStorage.getItem("codex-panel.follow-system-appearance") !== "false");
+
+  useEffect(() => {
+    // 恢复提示只切换一次，用户仍可稍后处理或继续查看其他页面。
+    if (needsRestart) { setView("overview"); setWorkflowUrl(""); }
+  }, [needsRestart]);
 
   function acceptState(next: LauncherState) {
     setState(next);
@@ -189,7 +195,7 @@ export function App() {
 
   const componentStates = [
     { id: "panel", label: "Panel 服务", text: snapshot.phase === "error" ? "启动异常" : hasProcess ? `运行中 · PID ${snapshot.childPid}` : "未启动", tone: snapshot.phase === "error" ? "error" : hasProcess ? "running" : "stopped" },
-    { id: "codex", label: "Codex 连接", text: snapshot.phase === "error" ? "连接失败" : ready ? "连接已就绪" : hasProcess ? "正在等待连接" : "未连接", tone: snapshot.phase === "error" ? "error" : ready ? "running" : hasProcess ? "waiting" : "stopped" },
+    { id: "codex", label: "Codex 连接", text: snapshot.phase === "error" ? "连接失败" : needsRestart ? "需要重启 Codex" : ready ? "连接已就绪" : hasProcess ? "正在等待连接" : "未连接", tone: snapshot.phase === "error" ? "error" : ready ? "running" : hasProcess ? "waiting" : "stopped" },
     { id: "embedded", label: "内嵌面板", text: snapshot.embeddedVisible ? "已在 Codex 中打开" : opening ? "正在打开" : queued ? "等待连接后打开" : ready ? "可以打开" : "尚未就绪", tone: snapshot.embeddedVisible ? "running" : opening || queued ? "waiting" : ready ? "available" : "stopped" },
   ];
 
@@ -238,7 +244,7 @@ export function App() {
                 {cardAction("restartService", "reconnect_codex", "重启服务", <span className="action-icon" aria-hidden="true">↻</span>, !hasProcess)}
               </Flex>}
               {component.id === "codex" && <Flex className="card-actions">{cardAction("openCodex", "open_codex", "打开 Codex", <LinearIcon name="openExternal" />)}</Flex>}
-              {component.id === "embedded" && <Flex className="card-actions">{cardAction("panelAction", "open_embedded_panel", panelLabel, <LinearIcon name="panel" />, opening || queued, false, panelButton)}</Flex>}
+              {component.id === "embedded" && <Flex className="card-actions">{needsRestart ? <Button ref={panelButton} id="panelAction" {...actionProps("reconnect_codex")}>重启 Codex 并连接</Button> : cardAction("panelAction", "open_embedded_panel", panelLabel, <LinearIcon name="panel" />, opening || queued, false, panelButton)}</Flex>}
             </div>)}</div>
             <Box mt="4">
               <Flex gap="2" wrap="wrap">

@@ -1,4 +1,29 @@
+更新后连接恢复（等待上游吸收）：现场已确认 Codex 26.928.31416 普通启动时没有 remote-debugging 参数，Panel 持续轮询旧端口。macOS 启动器复用普通进程检测，在连接未就绪且参数缺失时只在状态变化后显示管理窗口；轮询错误不能覆盖恢复提示，端口可用后仍自动恢复。按用户指定的简短文案显示“Codex 已经更新，请点击下方按钮重新启动”，状态仅提示需要重启，不展示调试端口解释；检测逻辑保持不变。用户点“重启 Codex 并连接”后复用已可置前的原生确认框，选择“稍后”不停止现有 Panel 服务，不自动退出用户 Codex，不绑定版本号、不修改官方应用。源文件 `src-tauri/src/main.rs`、`src-tauri/src/update_dialog.rs`、`launcher/src/App.tsx`；验证 `renderer_readiness_downgrades_without_losing_a_pending_open`、`launcher/src/App.spec.tsx`、`test/codex-reconnect.test.mjs` 及隔离原生弹窗。说明同步中英文 README、CHANGELOG、`docs/codex-compatibility.md` 和 `docs/fork-capabilities.md`。来源 `git log -S'confirm_ordinary_codex_restart' -- src-tauri/src/main.rs`；合并保留确认先于停止服务，上游等价实现后移除此差异。下一次官方自动更新全过程仍需现场确认。按维护契约手工同步，当前环境未提供 fork-doc 技能。
+
 # Fork 维护说明
+
+自定义 API 适配重新发现（等待上游吸收）：真实窗口已安装映射但 performance 仅剩 CSS，旧发现逻辑重注入时读取失败并移除适配。`scripts/codex-provider-quota.mjs` 从现有 importmap 的原 URL 识别当前 app-primary 模块；无效映射跳过，仍需源码结构验证，保留官方 provider 及其他发送阻止条件。验证 `test/codex-provider-quota.test.mjs` 的 blob-only 重注入复现、新旧开关与发送边界，以及 `test/injector.test.mjs`；对方 26.928.21956 原脚本匹配和改写语法已通过，本机真实 importmap 只读发现通过，对方最终发送待确认。来源 `git log -S'从已安装的映射找回当前模块' -- scripts/codex-provider-quota.mjs`；上游等价修复后移除。
+
+新聊天整行挂载修复（等待上游吸收）：真实 DOM 的新聊天按钮嵌套在 `.sidebar-item` 横向行，旁边有快速聊天；面板插到整行之后，并覆盖内层按钮的满高/伸缩尺寸为独立行。不复制整行附加操作、不修改原按钮。验证 `test/codex-sidebar-mount.test.mjs` 的原按钮点击保留与 `test/inject-fullheight-regression.test.mjs` 的真实浏览器上下边界、36px 行高及两种布局加载。源文件 `inject/codex-panel.user.js`；来源 `git log -S'const row = reference.parentElement.closest' -- inject/codex-panel.user.js`。上游等价修复后移除。
+
+Free 侧边栏兼容（等待上游吸收）：没有插件、宠物及 destination 行时，在主侧边栏可见且非 inert 的新聊天入口之后挂载；保留原有布局优先顺序，不按套餐判断、不选择正文按钮。参考行没有独立图标时创建自己的 SVG。代码 `inject/codex-panel.user.js`；测试 `test/codex-sidebar-mount.test.mjs`、`test/inject-fullheight-regression.test.mjs` 覆盖两种布局、点击/键盘、重建、图标及真实隔离 Chromium 加载。用户说明：中英文 README、`docs/fork-capabilities.md` 和更新日志。来源定位 `git log -S'Free 账号可能没有' -- inject/codex-panel.user.js`；上游具有等价入口策略后移除。他人 Free 账号真实 DOM 尚未采集，现场效果需安装后确认。
+
+本次整合 `codex/latest-codex-compat` 至 `310cec5`，保留其新版 CLI、发送适配、侧边栏挂载和断线重连；同时保留 `57a4ae5` 的 Data Router / 可见工作区修复及 `0ed6707` 的面板图标替换。内部兼容行为沿用各条目契约，合并验证包含相关 Node 测试、隔离 Chromium 挂载及通用安装包校验。
+
+26.928.20755 侧边栏挂载（等待上游吸收）：官方 app-initial-74096abaa6b3.js 的导航使用 `data-slate-sidebar-content`、`data-sidebar-destination`，部分原生行渲染为链接或 role=button 的 div。入口定位优先新版侧边栏目的地，旧滚动区域兼容链接及 role 按钮；克隆后去除 href、aria-labelledby、原生导航 data 标记，非 button 保留 Enter/Space 激活。代码 `inject/codex-panel.user.js`；`test/codex-sidebar-mount.test.mjs` 验证新版滚动区域外的导航项、旧结构、唯一入口、键盘激活和侧边栏重建后的重新挂载；已有 `test/inject.test.mjs` 同步选择器 fixture。错误提示不再将未挂载直接归因为用户没打开主窗口。实际 Codex UI 自动化被工具限制，验证为源码核对、隔离 DOM 与打包检查，现场恢复仍待确认。
+
+分离窗口识别（等待上游吸收）：首次加载和重新连接时，面板未就绪错误统一显示“Codex 中的任务面板尚未就绪，请稍后重试。”；仅汉化提示，不改超时和注入逻辑。用户现场日志确认 `detached-window.html?initialRoute=%2Fdetached-window` 无 Panel 入口。injector 按 URL 路径及解析后的 initialRoute 排除此类窗口，避免重载和注入分离聊天；入口未挂载或 source hash 不符时不得返回注入成功；只有主窗口存在时才注入，无主窗口时明确提示打开含项目侧边栏的主窗口。代码 `scripts/codex-injector.mjs`；验证 `test/codex-window-target.test.mjs` 覆盖现场 URL、编码路由、主窗口保留、两条注入路径超时后清理连接。真实登录后挂载仍需现场验证；可选 quota adapter 不可用不等于 CDP 断连。
+
+连接恢复（等待上游吸收）：调试端口中断后，macOS 常驻 injector 重新发现有效 Codex 端口、清理旧连接并更新运行描述；启动等待普通 Codex 退出期间也探测新出现的有效端口。失效候选不阻止后续候选探测。`waitingForCodex.message` 将端口和底层错误码传给启动器，提示实际“重启服务”入口，保留本机回环与原有原点校验。不自动关闭用户 Codex。代码：`scripts/codex-injector.mjs`、`src-tauri/src/main.rs`；针对性验证：`test/codex-reconnect.test.mjs` 和 `test/injector.test.mjs`。后续现场已确认更新或普通启动后的 Codex 缺少调试启动参数，恢复入口见“更新后连接恢复”条目；不得把模拟端口恢复或构建成功描述为未来更新全过程已验证。上游具备等价发现与错误显示后移除此条目。
+
+## 2026-09-30 最新版兼容
+
+- 生命周期：等待上游吸收。目的：修复官方 ChatGPT 26.928.20755 将 CLI 移入包目录后，程序发现和启动签名校验仍使用旧路径的问题。
+- 不变量：macOS 优先使用 `Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex`，旧布局仍使用 `Contents/Resources/codex`；启动器继续校验官方应用和实际二进制的签名、`Identifier=codex`、`TeamIdentifier=2DC432GLL2`，不改用未签名 shell 包装脚本，不修改官方应用。代码：`shared/codex-executable.mjs`、`src-tauri/src/main.rs`。
+- 项目模型选择与请求校验共用 `shared/panel-automation-options.mjs`，类型同步于 `.d.mts`；新增 `gpt-6.1-sol`、`gpt-6-sol`、`gpt-6-luna`，推理强度与默认值取自官方 CLI 0.159.2 的实际 `model/list`。保留已保存模型及自动化默认设置。同步现有目录断言：`test/panel-automation.test.mjs`。
+- 来源基线：`shay-wong/codex-panel` 的 `9628e79`；提交后可用 `git log -S'codex-cli' -- shared/codex-executable.mjs` 定位。合并时保留真实二进制的签名校验；上游提供等价目录支持与模型选项后移除此差异。
+- 用户入口：中英文 README；验证范围和限制：`docs/codex-compatibility.md`；索引：`docs/fork-capabilities.md`；发布记录：中英文 CHANGELOG。按本文件维护契约手工维护，当前环境未提供 fork-doc 技能。
+- 新版 composer 的提交门增加会话状态及 `isLoading` 条件；`scripts/codex-provider-quota.mjs` 识别扩展表达式但完整保留所有非额度条件。`test/codex-provider-quota.test.mjs` 的新版 fixture 验证加载中、会话不可用、待建会话和安全策略仍禁止提交；实际 `app-primary-92c16ff2fe4e.js` 改写后通过语法检查。沿用原有默认关闭、自定义本地 provider 限定及未知结构不改写约定；真实登录后发送尚未验证。
 
 
 继续规划导航确认（本次修复）：公共会话识别优先读取 `activeThreadRow` 的实际激活 ID，再回退 URL；不能使用导航前写入的 `lastNativeThreadId` 当作打开成功证据。此契约同时适用于预填前检查和发送后的绑定确认。代码 `inject/codex-panel.user.js`；验证 `node --test test/inject.test.mjs`，覆盖 URL 不变但正确会话已激活，以及其他会话激活时禁止预填；定位 `git log -S'Native in-app navigation' -- inject/codex-panel.user.js`。
@@ -25,6 +50,18 @@
 加载失败重试（本次修复，等待上游吸收）：错误页“重新加载”直接复用 `showPanel → preparePanel`，不能走对已打开面板提前返回的 `openPanel`；失败后可再次重试，不增加导航记录。启动器断开时明确提示先启动或重启服务。代码 `inject/codex-panel.user.js`；验证 `node --test test/inject.test.mjs`，覆盖重复失败、连接恢复及既有原生历史行为；用户入口为中英文 README，详细说明 `docs/fork-capabilities.md#switch-between-panel-and-native-codex-destinations`。来源定位 `git log -S'retry.addEventListener("click", showPanel)' -- inject/codex-panel.user.js`；合并时保留本契约，上游具备等价恢复行为与覆盖后移除。
 
 模型目录读取（本次修复，等待上游吸收）：Jira 显式绑定、规划/重新规划登记、聊天创建/设置/发送的共享模型目录必须使用 Codex `model/list` 分页元数据并耗尽 `nextCursor`，不得恢复 `debug models` 的完整提示词导出或仅调大缓冲区。工作流仍只查询 Skills，本地 Skill 符号链接补齐保持不变。代码 `server/ai-chat-catalog.mjs`、`server/codex-app-server.mjs`；本地查询在目标仓库目录运行并在读取后关闭子进程。验证 `node --test test/jira-planning.test.mjs test/ai-chat-runner.test.mjs test/ai-chat-server.test.mjs test/claim-queue.test.mjs test/jira-lifecycle.test.mjs test/workflow-settings.test.mjs`，包括 3 MiB debug 导出场景下 CLI 绑定、Spec 保存、重新规划和分页元数据字段保留。用户入口：中英文 README，详细说明 `docs/fork-capabilities.md#link-jira-requirements-to-repository-issues`；来源定位 `git log -S'async function listModels(appServer)' -- server/ai-chat-catalog.mjs`。合并时保留统一目录路径，上游具备等价实现与验证后移除。
+
+### 任务面板入口图标
+
+- 生命周期：`等待上游吸收`；内部兼容性修复。侧边栏参考行可能是宠物头像，复制样式后清空 `.icon-leading-slot` 并创建面板 SVG，不继承头像、动画或图片；旧版 SVG 参考行保持替换能力。入口子节点仅保留图标和文字，避免复制原生通知蓝点而常驻；不修改原生参考行。针对性验证：`node --test test/codex-sidebar-mount.test.mjs`，检查蓝点清除、原行不变及点击打开；合并时保留该内容边界，上游等价修复后移除。
+- 代码：`inject/codex-panel.user.js`；验证：`node --test test/inject.test.mjs` 覆盖宠物替换、重复执行及文字保留，并核对实际窗口图标。来源：`git log -S'slot.replaceChildren(icon)' -- inject/codex-panel.user.js`。上游具有等价图标槽替换后移除。
+
+### 新版 Codex 导航兼容
+
+- 生命周期：`等待上游吸收`；分类：内部兼容性修复，保持既有任务面板入口与原生返回行为。
+- 原因与不变量：新版 Data Router 的 navigator 不再提供 location；使用 `router.state.location`、`navigate` 与 `subscribe`，在导航实际提交后同步面板，并在销毁时取消订阅。旧版 MemoryRouter 保留现有实现。多个会话常驻 DOM 时选择可见工作区；面板隐藏原内容后继续复用已挂载区域，不挂到隐藏会话。
+- 代码与验证：`inject/codex-panel.user.js`、`test/inject.test.mjs`；`node --test test/inject.test.mjs test/inject-fullheight-regression.test.mjs`，覆盖新旧导航、异步提交、前进返回、订阅清理及隔离 Chromium 实际挂载。实际安装版本仅在当前窗口应用修复后核对面板 ready 与可见尺寸，不改任务数据库。
+- 来源定位：`git log -S'router.subscribe(syncNativeNavigation)' -- inject/codex-panel.user.js`。合并时保留导航提交时机和可见区域选择；上游提供等价兼容后移除此项。
 
 ## 精确上游基线
 

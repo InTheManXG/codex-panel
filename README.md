@@ -1,5 +1,15 @@
 # Codex Panel
 
+After Codex updates on macOS, Panel reconnects when a debugging port is available. If launch parameters were lost, the manager offers **重启 Codex 并连接** (Restart Codex and connect); restarting Codex requires confirmation. See [update recovery](docs/codex-compatibility.md#recovery-after-desktop-updates).
+
+The custom-provider send-limit switch retains its adapter when reconnecting to a window whose composer already loads through a module mapping.
+
+Panel also supports sidebars without Plugins or pets, including Free accounts, by placing its entry after New chat when needed. Panel appears on its own row below the complete New chat row, preserving New chat and Quick chat.
+
+Local build 0.4.4-fork adapts the sidebar entry to desktop 26.928.20755. DOM checks cover navigation rows outside the old scroll area and link/role-button entries. Actual signed-in desktop mounting still requires confirmation.
+
+Compatibility target (2026-09-30): ChatGPT desktop **26.928.20755** and standalone Codex CLI **0.159.2**. The macOS launcher recognizes the new packaged CLI layout; project model choices include **6.1 Sol**, **6 Sol**, and **6 Luna**. See [verification scope](docs/codex-compatibility.md) before building or installing.
+
 macOS releases provide a universal DMG for Apple Silicon and Intel, ad-hoc signed without Apple notarization. First launch may require allowing the app in System Settings → Privacy & Security.
 
 **Create and start** also works without linked repositories: a read-only Codex check selects repositories and their individual scopes, then starts the existing execution queue. Ambiguities are answered inline before any execution; no Spec is required for this execution path. A single linked repository goes straight to execution, while multiple linked repositories retain their selection and receive separate scopes. The analysis itself does not create a planning conversation, but **Plan with AI** remains available afterward so you can create a formal planning conversation and save a Spec while keeping the existing execution work.
