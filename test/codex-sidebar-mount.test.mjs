@@ -54,6 +54,25 @@ test("legacy scroll area accepts native link and role-button rows", () => {
   }
 });
 
+test("Panel does not inherit the native sidebar notification dot", () => {
+  const f = fixture('<div data-slate-sidebar-content><button data-sidebar-destination="plugins"><span class="icon-leading-slot"><svg></svg></span><span class="text-fade-truncate">Plugins</span><span data-native-dot style="background:blue;border-radius:50%"></span></button></div>');
+  try {
+    const { document } = f.dom.window;
+    const reference = document.querySelector('[data-sidebar-destination]');
+    const original = reference.outerHTML;
+    f.api.ensureEntry();
+    f.api.ensureEntry();
+    const entry = document.getElementById('codex-panel-entry');
+    assert.equal(entry.querySelector('[data-native-dot]'), null);
+    assert.equal(entry.children.length, 2);
+    assert.equal(entry.textContent.trim(), '任务面板');
+    assert.ok(entry.querySelector('.icon-leading-slot svg rect'));
+    assert.equal(reference.outerHTML, original);
+    entry.click();
+    assert.equal(f.opened, 1);
+  } finally { f.dom.window.close(); }
+});
+
 test("Free sidebar mounts after New chat without plugins, pets or destination attributes", () => {
   for (const container of ['aside', 'div data-slate-sidebar-content']) {
     for (const label of ['新聊天', 'New chat']) {

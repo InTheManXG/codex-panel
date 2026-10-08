@@ -410,8 +410,12 @@
     button.querySelectorAll("[id]").forEach((node) => node.removeAttribute("id"));
     const label = button.querySelector(".text-fade-truncate")
       || Array.from(button.querySelectorAll("span")).find((node) => buttonMatches(node, PLUGIN_LABELS));
-    if (label) label.textContent = "任务面板";
-    else button.textContent = "任务面板";
+    if (label) {
+      label.textContent = "任务面板";
+      // 只复用图标和文字的样式；原生入口的提示点没有 Panel 状态来源，复制后会常驻。
+      const icon = button.querySelector(".icon-leading-slot") || button.querySelector("svg");
+      button.replaceChildren(...(icon ? [icon, label] : [label]));
+    } else button.textContent = "任务面板";
     replaceEntryIcon(button);
     button.addEventListener("click", (event) => {
       event.preventDefault();

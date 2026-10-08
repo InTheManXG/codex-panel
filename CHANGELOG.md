@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Remove inherited native sidebar notification dots from the Panel entry so they do not remain permanently visible.
+
 - Localize the Panel-frame-not-ready error into Chinese for both initial injection and reconnection.
 
 - Shorten the recovery prompt to “Codex 已经更新，请点击下方按钮重新启动”; retain the Restart Codex and connect action.
