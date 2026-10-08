@@ -458,6 +458,7 @@ export async function reconcileInjectionRuntime({
   currentStatus,
   source,
   sourceHash,
+  reloadRequired = false,
   shouldOpen = false,
   removeRegisteredSource,
   registerCurrentSource,
@@ -472,7 +473,10 @@ export async function reconcileInjectionRuntime({
     } catch {}
   }
   const scriptIdentifier = await registerCurrentSource(source);
-  await reloadRenderer();
+  // Reconnecting a host must preserve the native in-memory route and draft.
+  if (reloadRequired || currentStatus.sourceHash !== sourceHash) {
+    await reloadRenderer();
+  }
   await evaluateCurrentSource(source);
   await publishRegistration(scriptIdentifier);
   const replaced = currentStatus.sourceHash !== sourceHash;
@@ -530,6 +534,21 @@ export function managedInjectorCommandMatches(command, {
       startupToken === null
       || commandArgumentMatches(command, "--startup-token", startupToken)
     );
+}
+
+// Window mounting can wait longer than the renderer's heartbeat expiry.
+export function startPanelHostHeartbeats(connections) {
+  const pending = new Set();
+  const timer = setInterval(() => {
+    for (const connection of connections.values()) {
+      if (connection.closed || !connection.hostBridge || pending.has(connection)) continue;
+      pending.add(connection);
+      Promise.resolve().then(() => connection.hostBridge.publishHeartbeat())
+        .catch(() => {})
+        .finally(() => pending.delete(connection));
+    }
+  }, 2_000);
+  return () => clearInterval(timer);
 }
 
 export function injectionReadinessMatches(status, {

@@ -6,6 +6,12 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Preserve the current Codex conversation and draft across Panel service restarts and mount retries when the patch code is unchanged, avoiding an unnecessary reload back to a new conversation.
+
+- Exclude standalone and hidden prewarmed Page document windows from Codex Panel injection, preventing repeated failed mounts in windows without a sidebar.
+
+- Keep the connected Codex status accurate while another window is still mounting; background window retries no longer interrupt the active window’s heartbeat.
+
 - Fix Panel immediately closing after Codex updates the current route state, affecting both the sidebar entry and the App’s Open Panel action and causing repeated flicker.
 
 - Keep automatic account name and avatar capture without opening the native profile menu when Panel opens.

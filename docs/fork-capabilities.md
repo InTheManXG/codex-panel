@@ -4,7 +4,7 @@ On macOS, Panel detects Codex restarts that lost connection arguments, offers **
 
 For the 2026-09-30 desktop/CLI compatibility target, packaged macOS executable layout, new model options, and validation limits, see [Codex compatibility](codex-compatibility.md).
 
-Panel participates in Codex’s native navigation history: Back returns to the page before Panel, Forward reopens Panel, and navigating from Panel to a native destination adds that destination to the same history. Route changes control visibility without matching button or command labels; utility actions that do not navigate leave Panel open.
+Panel participates in Codex’s native navigation history: Back returns to the page before Panel, Forward reopens Panel, and navigating from Panel to a native destination adds that destination to the same history. Route changes control visibility without matching button or command labels; utility actions that do not navigate leave Panel open. The Launcher keeps the main window connected while other windows retry mounting; its connection status updates without opening Panel. Standalone Page windows marked `window=page`, including hidden prewarmed documents, are not injection targets; a Page displayed inside the main window remains supported. Mount retries and Panel service restarts preserve the current Codex page and draft when the patch code is unchanged. Connection credentials refresh in the current document; installing or updating the patch, or preparing its quota module for the first time, still requires one reload.
 
 
 Continue planning confirms the active native conversation before prefill, including navigation that leaves the window URL unchanged.

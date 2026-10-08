@@ -529,7 +529,6 @@ test("attach is idempotent for the same source hash and does not open a closed p
   assert.deepEqual(calls, [
     ["remove", "old-registration"],
     ["register", "current-source"],
-    ["reload"],
     ["evaluate", "current-source"],
     ["publish", "current-registration"],
   ]);
@@ -566,7 +565,7 @@ test("an explicit attach open request reopens a previously closed page", async (
   assert.deepEqual(calls.at(-1), ["open"]);
 });
 
-test("attach reloads the renderer and restores an open page even when the source is current", async () => {
+test("attach preserves the renderer and restores an open page when the source is current", async () => {
   const calls = [];
   const result = await reconcileInjectionRuntime({
     currentStatus: {
@@ -596,7 +595,6 @@ test("attach reloads the renderer and restores an open page even when the source
   assert.deepEqual(calls, [
     ["remove", "current-registration"],
     ["register", "current-source"],
-    ["reload"],
     ["evaluate", "current-source"],
     ["publish", "replacement-registration"],
     ["open"],
@@ -754,4 +752,55 @@ test("resident frame matching accepts Panel route queries but rejects other docu
     "chrome-error://chromewebdata/",
     "http://127.0.0.1:47823/?host=codex",
   ), false);
+});
+
+test("connected renderer heartbeats continue during window mounting and stop on cleanup", async (t) => {
+  const { startPanelHostHeartbeats } = await import("../scripts/codex-injector-runtime.mjs");
+  t.mock.timers.enable({ apis: ["setInterval", "Date"], now: 10_000 });
+  let heartbeatAt = 10_000;
+  let releaseSlow;
+  let slowCalls = 0;
+  const connections = new Map([
+    ["main", { hostBridge: { async publishHeartbeat() { heartbeatAt = Date.now(); } } }],
+    ["slow", { hostBridge: { publishHeartbeat() { slowCalls++; return new Promise(resolve => { releaseSlow = resolve; }); } } }],
+  ]);
+  const stop = startPanelHostHeartbeats(connections);
+  try {
+    for (let second = 0; second < 20; second += 2) {
+      t.mock.timers.tick(2_000);
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(Date.now() - heartbeatAt, 0, "a busy window must not starve the connected window");
+    }
+    assert.equal(slowCalls, 1, "pending heartbeats must not overlap");
+    stop();
+    const lastHeartbeat = heartbeatAt;
+    releaseSlow();
+    await new Promise(resolve => setImmediate(resolve));
+    t.mock.timers.tick(4_000);
+    assert.equal(heartbeatAt, lastHeartbeat);
+  } finally { stop(); }
+});
+
+test("retrying a still-mounting renderer keeps its current document under the same manager", async () => {
+  let reloads = 0;
+  let evaluations = 0;
+  const currentStatus = { sourceHash: "current", startupToken: "manager", entryMounted: false, scriptIdentifier: "registered" };
+  const request = {
+    currentStatus, source: "source", sourceHash: "current", startupToken: "manager",
+    removeRegisteredSource: async () => {}, registerCurrentSource: async () => "registered",
+    reloadRenderer: async () => { reloads++; },
+    evaluateCurrentSource: async () => { evaluations++; },
+    publishRegistration: async () => {}, reopen: async () => {},
+  };
+  await reconcileInjectionRuntime(request);
+  await reconcileInjectionRuntime(request);
+  assert.equal(reloads, 0, "mount timeouts must not restart React initialization");
+  assert.equal(evaluations, 2);
+  await reconcileInjectionRuntime({ ...request, startupToken: "new-manager" });
+  await reconcileInjectionRuntime({ ...request, sourceHash: "new-source" });
+  assert.equal(reloads, 1, "only changed code needs a reload; a new manager preserves the document");
+  await reconcileInjectionRuntime({ ...request, reloadRequired: true });
+  assert.equal(reloads, 2, "a newly prepared quota module needs one reload after a failed preparation");
+  await reconcileInjectionRuntime(request);
+  assert.equal(reloads, 2, "ordinary mounting retries resume without reloading");
 });

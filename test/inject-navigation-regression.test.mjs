@@ -225,3 +225,88 @@ test("opening Panel reads compact profile identity without opening the native se
     assert.equal(menuOpens, 0, "an unavailable legacy identity must not open settings either");
   });
 });
+
+
+test("a restarted host reconnects the current document and rejects the previous capability", () => {
+  const dom = new JSDOM('<main></main>', { url: 'https://codex.invalid/', runScripts: 'outside-only' });
+  const { window } = dom;
+  const heartbeat = (capability, startupToken) => window.dispatchEvent(new window.MessageEvent('message', {
+    source: window, origin: window.location.origin,
+    data: { type: '__codexPanelHostHeartbeatV1', capability, startupToken, at: Date.now() },
+  }));
+  try {
+    window.__CODEX_PANEL_SOURCE_HASH__ = 'same-code';
+    window.__CODEX_PANEL_HOST_CAPABILITY__ = 'host-a';
+    window.eval(source);
+    const previous = window.__codexPanelInjection__;
+    heartbeat('host-a', 'manager-a');
+    assert.equal(previous.startupToken, 'manager-a');
+    const document = window.document;
+    window.__CODEX_PANEL_HOST_CAPABILITY__ = 'host-b';
+    window.eval(source);
+    const current = window.__codexPanelInjection__;
+    assert.notEqual(current, previous, 'a new host must replace the closure holding the old capability');
+    assert.equal(window.document, document);
+    heartbeat('host-b', 'manager-b');
+    assert.equal(current.startupToken, 'manager-b');
+    heartbeat('host-a', 'stale-manager');
+    assert.equal(current.startupToken, 'manager-b', 'retired hosts must not overwrite readiness');
+    window.eval(source);
+    assert.equal(window.__codexPanelInjection__, current, 'same-host retries reuse the current injection');
+  } finally {
+    window.__codexPanelInjection__?.destroy();
+    dom.window.close();
+  }
+});
+
+
+test("host replacement preserves Panel Back/Forward history without adding a duplicate entry", async () => {
+  const dom = new JSDOM('<main><aside><a href="/">New chat</a></aside><div><div data-app-shell-main-content-layout><div class="app-shell-main-content-frame">conversation</div></div></div></main>', {
+    url: 'https://codex.invalid/', runScripts: 'outside-only',
+  });
+  const { window } = dom;
+  window.HTMLElement.prototype.getBoundingClientRect = () => ({ top: 0, left: 0, right: 100, bottom: 500, width: 100, height: 500 });
+  const entries = [{ pathname: '/local/thread-1', search: '', hash: '', key: '0', state: null }];
+  const listeners = new Set();
+  let index = 0, nextKey = 1, historyAction = 'POP';
+  const router = {
+    get state() { return { location: entries[index], historyAction }; },
+    subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    navigate(to, options) {
+      historyAction = typeof to === 'number' ? 'POP' : 'PUSH';
+      if (typeof to === 'number') index += to;
+      else entries.splice(++index, entries.length, { ...to, state: options?.state, key: String(nextKey++) });
+      listeners.forEach(fn => fn());
+    },
+  };
+  window.document.querySelector('aside').__reactFiber$fixture = { memoizedProps: { router } };
+  const restart = (host) => {
+    window.__CODEX_PANEL_SOURCE_HASH__ = 'same-code';
+    window.__CODEX_PANEL_HOST_CAPABILITY__ = host;
+    window.eval(source);
+    return window.__codexPanelInjection__;
+  };
+  const visible = () => window.document.getElementById('codex-panel-page')?.hidden === false;
+  try {
+    await restart('host-a').open();
+    assert.equal(visible(), true);
+    const panelLocation = router.state.location;
+    router.navigate({ pathname: '/plugins', search: '', hash: '' });
+    restart('host-b');
+    router.navigate(-1);
+    assert.equal(visible(), true, 'Back must restore the original Panel entry after host replacement');
+    router.navigate(1);
+    assert.equal(visible(), false);
+    router.navigate(-1);
+    const length = entries.length;
+    await restart('host-c').open();
+    assert.equal(entries.length, length, 'reopening an already visible Panel must not push duplicate history');
+    assert.equal(router.state.location.key, panelLocation.key);
+    assert.equal(visible(), true);
+    router.navigate(panelLocation, { state: panelLocation.state });
+    assert.equal(visible(), false, 'copied native route markers must still be rejected');
+  } finally {
+    window.__codexPanelInjection__?.destroy();
+    dom.window.close();
+  }
+});

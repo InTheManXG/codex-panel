@@ -30,6 +30,7 @@ import {
   residentInjectorCommandMatches,
   restartResidentInjector,
   stopResidentInjectors,
+  startPanelHostHeartbeats,
 } from "./codex-injector-runtime.mjs";
 import { readCodexQuotaStatus } from "./codex-rate-limits.mjs";
 import { prepareCodexProviderQuotaFix, watchCodexProviderQuotaPreferences } from "./codex-provider-quota.mjs";
@@ -623,6 +624,9 @@ function isCodexTarget(target) {
     const url = new URL(target.url);
     const route = url.searchParams.get("initialRoute") || "";
     if (url.pathname === "/detached-window.html" || route === "/detached-window" || route.startsWith("/detached-window/")) return false;
+    // Standalone Page windows (including hidden prewarms) have no Codex sidebar.
+    const pageRoute = new URL(route || url.href, url);
+    if (/^\/space\/[^/]+$/.test(pageRoute.pathname) && pageRoute.searchParams.get("window") === "page") return false;
   } catch {
     return false;
   }
@@ -2218,6 +2222,7 @@ function installPanelHostBinding(
           if (globalThis.__codexPanelIsolatedBridgeV1 === capability) return;
           globalThis.__codexPanelIsolatedBridgeV1 = capability;
           window.addEventListener("message", (event) => {
+            if (globalThis.__codexPanelIsolatedBridgeV1 !== capability) return;
             const message = event.data;
             if (
               !message
@@ -2306,6 +2311,7 @@ async function readInjectionStatus(cdp) {
     expression: `({
       version: window.__codexPanelInjection__?.version || null,
       sourceHash: window.__codexPanelInjection__?.sourceHash || null,
+      quotaBootstrapPrepared: window.__codexPanelQuotaBootstrapPrepared__ === true,
       scriptIdentifier: window[${JSON.stringify(injectionScriptIdentifierName)}] || null,
       entryMounted: Boolean(document.getElementById("codex-panel-entry")),
       pageMounted: Boolean(document.getElementById("codex-panel-page")),
@@ -2466,7 +2472,10 @@ async function injectTarget(
     await cdp.send("Runtime.enable");
     if (keepAlive) await hostBridge.install();
     await waitForRendererReady(cdp, 15_000);
-    if (keepAlive) source = `${await prepareCodexProviderQuotaFix(cdp, panelEnvironment("PREFERENCES_FILE"))}\n${source}`;
+    const quotaSource = keepAlive
+      ? await prepareCodexProviderQuotaFix(cdp, panelEnvironment("PREFERENCES_FILE"))
+      : "";
+    if (quotaSource) source = `window.__codexPanelQuotaBootstrapPrepared__ = true;\n${quotaSource}\n${source}`;
     await cdp.send("Page.setBypassCSP", { enabled: true });
     if (keepAlive && attachExisting) {
       const currentStatus = await readInjectionStatus(cdp);
@@ -2474,6 +2483,7 @@ async function injectTarget(
         currentStatus,
         source,
         sourceHash,
+        reloadRequired: Boolean(quotaSource) && currentStatus.quotaBootstrapPrepared !== true,
         shouldOpen,
         removeRegisteredSource: (identifier) => cdp.send(
           "Page.removeScriptToEvaluateOnNewDocument",
@@ -2606,27 +2616,37 @@ async function injectAll(
   }
 
   const results = [];
+  let lastError;
   for (const target of targets) {
     if (injectedTargets.has(target.id)) continue;
     const firstTarget = injectedTargets.size === 0 && results.length === 0;
-    const { result, connection } = await injectTarget(
-      runtime,
-      target,
-      source,
-      sourceHash,
-      shouldOpen && firstTarget,
-      firstTarget ? screenshotPath : null,
-      keepAlive,
-      supervisor,
-      attachExisting,
-      startupToken,
-      onCodexAppServerNotification,
-      onCodexAppServerReady,
-      onCodexAppServerUnavailable,
-    );
-    if (connection) injectedTargets.set(target.id, connection);
-    results.push({ targetId: target.id, title: target.title, url: target.url, ...result });
+    try {
+      const { result, connection } = await injectTarget(
+        runtime,
+        target,
+        source,
+        sourceHash,
+        shouldOpen && firstTarget,
+        firstTarget ? screenshotPath : null,
+        keepAlive,
+        supervisor,
+        attachExisting,
+        startupToken,
+        onCodexAppServerNotification,
+        onCodexAppServerReady,
+        onCodexAppServerUnavailable,
+      );
+      if (connection) injectedTargets.set(target.id, connection);
+      results.push({ targetId: target.id, title: target.title, url: target.url, ...result });
+    } catch (error) {
+      lastError = error;
+      const targetUrl = new URL(target.url || "app://-/");
+      const route = targetUrl.searchParams.get("initialRoute");
+      const targetPath = route ? new URL(route, targetUrl).pathname : targetUrl.pathname;
+      console.error(`Panel window ${target.id} (${JSON.stringify(target.title || "")}, ${targetPath}) is not ready: ${error.message}`);
+    }
   }
+  if (lastError && injectedTargets.size === 0 && results.length === 0) throw lastError;
   return results;
 }
 
@@ -2636,9 +2656,6 @@ async function currentInjectionSource() {
   const sourceHash = createHash("sha256").update(JSON.stringify({
     userScript,
     providerQuotaFix,
-    managedOrigin: panelOrigin,
-    pageUrl: panelPageUrl,
-    privatePanelMode,
   })).digest("hex");
   const runtimeSource = `window.__CODEX_PANEL_MANAGED_ORIGIN__ = ${JSON.stringify(panelOrigin)};
 window.__CODEX_PANEL_HOST_CAPABILITY__ = ${JSON.stringify(hostCapability)};
@@ -2805,6 +2822,7 @@ async function main() {
   let openControl = null;
   let openSignalHandler = null;
   let preferencesWatcher = null;
+  let stopHostHeartbeats = null;
   const injectedTargets = new Map();
   const remoteCodexConnections = new Map();
   const routableCodexConnections = new Set();
@@ -2918,6 +2936,7 @@ async function main() {
     if (cleanupPromise) return cleanupPromise;
     cleanupPromise = (async () => {
       preferencesWatcher?.close();
+      stopHostHeartbeats?.();
       injectedTargets.forEach((connection) => {
         unregisterRoutableCodexConnection(connection);
         unregisterQuotaPolicyCdp(connection);
@@ -3148,6 +3167,7 @@ async function main() {
     } else {
       cdpRuntime = tcpCdpRuntime(options.port);
     }
+    if (options.watch) stopHostHeartbeats = startPanelHostHeartbeats(injectedTargets);
     const firstOpenGeneration = openRequestGeneration;
     const shouldOpenFirstTarget = hasOpenPending();
     let firstResults = [];
@@ -3217,11 +3237,6 @@ async function main() {
         console.error(`Waiting for Panel service: ${error.message}`);
       }
       if (stopping) break;
-      for (const connection of injectedTargets.values()) {
-        try {
-          await connection.hostBridge?.publishHeartbeat();
-        } catch (_) {}
-      }
       if (idleAfterNormalExit) {
         if (!hasOpenPending()) continue;
         const launchRequestGeneration = openRequestGeneration;

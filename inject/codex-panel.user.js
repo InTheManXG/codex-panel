@@ -52,7 +52,7 @@
   const PANEL_ROUTE_STATE = "__codexPanel";
 
   const previous = window[SENTINEL_KEY];
-  if (previous?.sourceHash === SOURCE_HASH && typeof previous.refresh === "function") {
+  if (previous?.sourceHash === SOURCE_HASH && previous.hostCapability === HOST_CAPABILITY && typeof previous.refresh === "function") {
     previous.refresh();
     return;
   }
@@ -91,7 +91,7 @@
   let nativeNavigator = null;
   let detachNativeNavigation = null;
   let lastNativeLocation = null;
-  const panelLocationKeys = new Set();
+  const panelLocationKeys = new Set(previous?.sourceHash === SOURCE_HASH ? previous.panelLocationKeys : []);
   let pendingPanelNavigation = false;
   let lastNativeProjectId = "";
   let currentCodexUser = null;
@@ -2748,6 +2748,8 @@
   const api = {
     version: VERSION,
     sourceHash: SOURCE_HASH,
+    hostCapability: HOST_CAPABILITY,
+    panelLocationKeys,
     get ready() {
       return frameReady;
     },

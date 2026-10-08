@@ -3,6 +3,7 @@ import { EventEmitter, once } from "node:events";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { Readable, Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -468,4 +469,49 @@ test("injector cleanup never terminates the launched ChatGPT process", () => {
   );
   assert.match(cleanupSource, /launchedCodex\?\.unref\?\.\(\)/);
   assert.doesNotMatch(cleanupSource, /launchedCodex\.kill/);
+});
+
+
+test("injection code identity survives host address and capability rotation", async () => {
+  const start = source.indexOf('async function currentInjectionSource()');
+  const end = source.indexOf('async function resolveRunnableCodexExecutable', start);
+  const context = vm.createContext({
+    createHash, URL, injectionPath: '/fixture/inject.js',
+    readFile: async (path) => String(path).endsWith('inject.js') ? '// injection' : '// quota',
+    panelOrigin: 'http://127.0.0.1:10001', panelPageUrl: 'http://127.0.0.1:10001/first/',
+    privatePanelMode: true, hostCapability: 'first', injectionSourceHashName: '__CODEX_PANEL_SOURCE_HASH__',
+  });
+  vm.runInContext(source.slice(start, end).replaceAll('import.meta.url', '"file:///fixture/injector.mjs"'), context);
+  const first = await vm.runInContext('currentInjectionSource()', context);
+  Object.assign(context, { panelOrigin: 'http://127.0.0.1:10002', panelPageUrl: 'http://127.0.0.1:10002/second/', hostCapability: 'second' });
+  const second = await vm.runInContext('currentInjectionSource()', context);
+  assert.equal(second.sourceHash, first.sourceHash, 'restarting a service is not a code update');
+  assert.notEqual(second.source, first.source, 'connection credentials must still rotate');
+  context.readFile = async () => '// upgraded code';
+  const upgraded = await vm.runInContext('currentInjectionSource()', context);
+  assert.notEqual(upgraded.sourceHash, first.sourceHash);
+});
+
+
+test("retired isolated host listeners do not duplicate notifications or accept old requests", () => {
+  const start = source.indexOf('expression: `(() => {\n          const capability =');
+  const end = source.indexOf('`,', start);
+  const template = source.slice(start + 'expression: '.length, end + 1);
+  const listeners = [];
+  const notifications = [], requests = [];
+  const window = { location: { origin: 'https://codex.invalid' }, addEventListener: (_, fn) => listeners.push(fn) };
+  const context = vm.createContext({ window, notify: (value) => notifications.push(value), request: (value) => requests.push(value) });
+  const install = (hostCapability) => {
+    const script = vm.runInNewContext(template, { hostCapability, codexNotificationBindingName: 'notify', hostRequestMessage: 'request', hostBindingName: 'request' });
+    vm.runInContext(script, context);
+  };
+  const send = (data) => listeners.forEach(fn => fn({ source: window, origin: window.location.origin, data }));
+  install('old-host');
+  install('new-host');
+  send({ type: 'mcp-notification', hostId: 'local', method: 'thread/updated' });
+  assert.equal(notifications.length, 1);
+  send({ type: 'request', capability: 'old-host', payload: { id: 'stale' } });
+  assert.equal(requests.length, 0);
+  send({ type: 'request', capability: 'new-host', payload: { id: 'current' } });
+  assert.equal(requests.length, 1);
 });
