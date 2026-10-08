@@ -529,7 +529,6 @@ test("attach is idempotent for the same source hash and does not open a closed p
   assert.deepEqual(calls, [
     ["remove", "old-registration"],
     ["register", "current-source"],
-    ["reload"],
     ["evaluate", "current-source"],
     ["publish", "current-registration"],
   ]);
@@ -566,7 +565,7 @@ test("an explicit attach open request reopens a previously closed page", async (
   assert.deepEqual(calls.at(-1), ["open"]);
 });
 
-test("attach reloads the renderer and restores an open page even when the source is current", async () => {
+test("attach preserves the renderer and restores an open page when the source is current", async () => {
   const calls = [];
   const result = await reconcileInjectionRuntime({
     currentStatus: {
@@ -596,7 +595,6 @@ test("attach reloads the renderer and restores an open page even when the source
   assert.deepEqual(calls, [
     ["remove", "current-registration"],
     ["register", "current-source"],
-    ["reload"],
     ["evaluate", "current-source"],
     ["publish", "replacement-registration"],
     ["open"],
@@ -754,4 +752,22 @@ test("resident frame matching accepts Panel route queries but rejects other docu
     "chrome-error://chromewebdata/",
     "http://127.0.0.1:47823/?host=codex",
   ), false);
+});
+
+// 首次适配需要刷新模块图；同一版本重试不能再清空原生聊天页面。
+test("attach reloads only when the required quota adapter has not executed", async () => {
+  for (const installed of [false, true]) {
+    const calls = [];
+    await reconcileInjectionRuntime({
+      currentStatus: {sourceHash: "same", providerQuotaInstalled: installed, pageVisible: true},
+      source: "source", sourceHash: "same", requiresQuotaFix: true,
+      removeRegisteredSource: async () => {},
+      registerCurrentSource: async () => "registration",
+      reloadRenderer: async () => calls.push("reload"),
+      evaluateCurrentSource: async () => calls.push("evaluate"),
+      publishRegistration: async () => calls.push("publish"),
+      reopen: async () => calls.push("open"),
+    });
+    assert.deepEqual(calls, installed ? ["evaluate", "publish", "open"] : ["reload", "evaluate", "publish", "open"]);
+  }
 });

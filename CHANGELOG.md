@@ -6,6 +6,9 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Keep the UI responsive during exit by cleaning up managed processes once in a worker, releasing the child-state lock before waiting, and logging cleanup duration.
+- Avoid repeated Codex page reloads on connection retries when the injection source is unchanged and the required adapter is installed; retain necessary initial and changed-source reloads.
+
 - Remove inherited native sidebar notification dots from the Panel entry so they do not remain permanently visible.
 
 - Localize the Panel-frame-not-ready error into Chinese for both initial injection and reconnection.

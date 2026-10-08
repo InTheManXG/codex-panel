@@ -459,6 +459,7 @@ export async function reconcileInjectionRuntime({
   source,
   sourceHash,
   shouldOpen = false,
+  requiresQuotaFix = false,
   removeRegisteredSource,
   registerCurrentSource,
   reloadRenderer,
@@ -472,10 +473,13 @@ export async function reconcileInjectionRuntime({
     } catch {}
   }
   const scriptIdentifier = await registerCurrentSource(source);
-  await reloadRenderer();
+  // 重试沿用已执行的模块；只有源码变化或适配尚未安装时才重载原生页面。
+  const replaced = currentStatus.sourceHash !== sourceHash;
+  if (replaced || (requiresQuotaFix && !currentStatus.providerQuotaInstalled)) {
+    await reloadRenderer();
+  }
   await evaluateCurrentSource(source);
   await publishRegistration(scriptIdentifier);
-  const replaced = currentStatus.sourceHash !== sourceHash;
   const shouldRemainOpen = shouldOpen || currentStatus.pageVisible === true;
   if (shouldRemainOpen) await reopen();
   return { replaced, scriptIdentifier, shouldRemainOpen };

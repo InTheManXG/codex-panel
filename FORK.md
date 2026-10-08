@@ -2,6 +2,8 @@
 
 # Fork 维护说明
 
+退出响应与重试闪动（等待上游吸收；内部兼容性修复）：用户确认 2026-10-08 10:41 的约十秒退出停顿由强制退出结束，不能将系统 termination 日志当作清理成功。当前 Tao 的 AppKit 原生退出直接进入 `applicationWillTerminate`，绕过 Tauri `ExitRequested`；通过 `macos_exit.rs` 给原有代理补充缺失的 `applicationShouldTerminate:` 并刷新 AppKit 方法缓存，将 Dock/系统退出转交 Tauri，保留原代理其他行为；已有同名方法时拒绝覆盖。普通退出由 `ExitRequested` 暂缓，`ExitState` 在工作线程等待生命周期锁并仅清理一次，完成后重新请求退出；`Exit` 不再更新 UI 或重复停服务。进程停止前释放 child 状态锁，退出期间拒绝启动/重连及新安装，已在后台清理的更新重启仍按原流程放行。启动日志记录了适配模块执行、未就绪、再次执行；相同 source hash 且所需额度适配已经执行时仅重新绑定注入，不再整页 reload，初次安装及代码变化仍刷新。代码：`src-tauri/src/main.rs`、`src-tauri/src/macos_exit.rs`、`scripts/codex-injector.mjs`、`scripts/codex-injector-runtime.mjs`；验证：独立 AppKit 退出探针及 Rust 原生代理回调，Rust `exit_does_not_block_ui_on_lifecycle_lock_and_cleans_up_once` 与 `test/injector-host-runtime.test.mjs`，以及现有 injector、quota、reconnect 检查。来源定位：`git log -S'struct ExitState' -- src-tauri/src/main.rs`。合并保留更新安装保护、单次后台清理及适配安装判定；上游等价修复后移除。用户正在使用的应用未自动重启，实际退出及闪动效果待新版现场确认。
+
 自定义 API 适配重新发现（等待上游吸收）：真实窗口已安装映射但 performance 仅剩 CSS，旧发现逻辑重注入时读取失败并移除适配。`scripts/codex-provider-quota.mjs` 从现有 importmap 的原 URL 识别当前 app-primary 模块；无效映射跳过，仍需源码结构验证，保留官方 provider 及其他发送阻止条件。验证 `test/codex-provider-quota.test.mjs` 的 blob-only 重注入复现、新旧开关与发送边界，以及 `test/injector.test.mjs`；对方 26.928.21956 原脚本匹配和改写语法已通过，本机真实 importmap 只读发现通过，对方最终发送待确认。来源 `git log -S'从已安装的映射找回当前模块' -- scripts/codex-provider-quota.mjs`；上游等价修复后移除。
 
 新聊天整行挂载修复（等待上游吸收）：真实 DOM 的新聊天按钮嵌套在 `.sidebar-item` 横向行，旁边有快速聊天；面板插到整行之后，并覆盖内层按钮的满高/伸缩尺寸为独立行。不复制整行附加操作、不修改原按钮。验证 `test/codex-sidebar-mount.test.mjs` 的原按钮点击保留与 `test/inject-fullheight-regression.test.mjs` 的真实浏览器上下边界、36px 行高及两种布局加载。源文件 `inject/codex-panel.user.js`；来源 `git log -S'const row = reference.parentElement.closest' -- inject/codex-panel.user.js`。上游等价修复后移除。

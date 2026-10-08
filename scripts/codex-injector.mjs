@@ -2306,6 +2306,7 @@ async function readInjectionStatus(cdp) {
     expression: `({
       version: window.__codexPanelInjection__?.version || null,
       sourceHash: window.__codexPanelInjection__?.sourceHash || null,
+      providerQuotaInstalled: globalThis.__codexPanelProviderQuotaV1__?.installed === true,
       scriptIdentifier: window[${JSON.stringify(injectionScriptIdentifierName)}] || null,
       entryMounted: Boolean(document.getElementById("codex-panel-entry")),
       pageMounted: Boolean(document.getElementById("codex-panel-page")),
@@ -2466,7 +2467,10 @@ async function injectTarget(
     await cdp.send("Runtime.enable");
     if (keepAlive) await hostBridge.install();
     await waitForRendererReady(cdp, 15_000);
-    if (keepAlive) source = `${await prepareCodexProviderQuotaFix(cdp, panelEnvironment("PREFERENCES_FILE"))}\n${source}`;
+    const quotaSource = keepAlive
+      ? await prepareCodexProviderQuotaFix(cdp, panelEnvironment("PREFERENCES_FILE"))
+      : "";
+    if (keepAlive) source = `${quotaSource}\n${source}`;
     await cdp.send("Page.setBypassCSP", { enabled: true });
     if (keepAlive && attachExisting) {
       const currentStatus = await readInjectionStatus(cdp);
@@ -2475,6 +2479,7 @@ async function injectTarget(
         source,
         sourceHash,
         shouldOpen,
+        requiresQuotaFix: Boolean(quotaSource),
         removeRegisteredSource: (identifier) => cdp.send(
           "Page.removeScriptToEvaluateOnNewDocument",
           { identifier },
