@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Move the Panel entry to the left navigation rail as an icon with a tooltip; keep it available when the content sidebar is collapsed.
+
 - Mount the Panel entry in the available sidebar instead of stopping at a retained inactive sidebar, and move the existing entry when sidebar interactivity changes.
 
 - Avoid repeated renderer reloads when the composer adapter mapping is ready but its lazy module has not executed yet, preventing retries from repeatedly restoring another page.

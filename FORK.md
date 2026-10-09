@@ -443,3 +443,8 @@ Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标�
 
 - 生命周期：等待上游吸收。新版侧边栏通过 `inert` 切换可交互状态；入口遍历侧边栏并跳过 inert、hidden 或无高度节点，旧滚动区域及 Free 账号新聊天入口同样过滤。监听 inert/hidden 变化，在原生切换后迁移同一个入口，不覆盖新聊天。
 - 代码：`inject/codex-panel.user.js`；验证：`test/codex-sidebar-mount.test.mjs` 覆盖前置 inert 侧边栏、激活切换、唯一入口与点击；`test/inject.test.mjs` 保留旧布局与本地化定位覆盖。该改动解决已复现的选择器缺陷，实际更新后窗口中的恢复效果仍待用户确认。
+
+### 左侧图标栏任务面板入口
+
+- 用户指定将入口移到最左侧竖向图标栏。新版优先使用 `data-app-navigation-rail` 内原生导航的滚动区，在现有导航下方、账户区之前放置独立图标按钮；悬停标题与无障碍名称保留“任务面板”，点击沿用 `openPanel`。内容侧边栏不再重复放置文字入口，收起内容侧边栏不影响图标。没有图标栏的旧布局保留原入口。
+- 代码：`inject/codex-panel.user.js`；验证：`test/codex-sidebar-mount.test.mjs` 直接检查挂载位置、图标与标题、唯一入口及内容侧边栏收起后点击；实际 App 视觉位置待新包确认。生命周期：Fork 产品入口布局。

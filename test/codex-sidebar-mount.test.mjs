@@ -155,3 +155,25 @@ test("mount skips retained inert sidebars and follows the active sidebar", () =>
     assert.equal(f.opened, 1);
   } finally { f.dom.window.close(); }
 });
+
+// 直接验证用户指定的位置：图标栏导航末尾、头像之前，内容侧边栏不再保留入口。
+test("Panel lives in the navigation rail and opens when the content sidebar is collapsed", () => {
+  const f = fixture(`<nav data-app-navigation-rail><div class="overflow-y-auto"><div><button class="native-icon" data-sidebar-destination="home"><svg></svg>Home</button></div></div><button id="avatar">Account</button></nav>
+    <aside data-slate-sidebar-content><button data-sidebar-destination="plugins">Plugins</button></aside>`);
+  try {
+    const document = f.dom.window.document;
+    f.api.ensureEntry();
+    const entry = document.getElementById('codex-panel-entry');
+    assert.equal(entry.parentElement, document.querySelector('.overflow-y-auto'));
+    assert.equal(entry.textContent.trim(), '');
+    assert.equal(entry.title, '任务面板');
+    assert.equal(entry.getAttribute('aria-label'), '打开任务面板');
+    assert.ok(entry.querySelector('svg rect'));
+    document.querySelector('aside').setAttribute('inert', '');
+    f.api.ensureEntry();
+    assert.equal(document.querySelectorAll('#codex-panel-entry').length, 1);
+    assert.equal(document.querySelector('aside #codex-panel-entry'), null);
+    entry.click();
+    assert.equal(f.opened, 1);
+  } finally { f.dom.window.close(); }
+});

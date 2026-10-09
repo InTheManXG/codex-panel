@@ -222,6 +222,26 @@
       #${ENTRY_ID} {
         color: var(--color-token-foreground, inherit);
       }
+      #${ENTRY_ID}[data-codex-panel-rail="true"] {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        align-self: center;
+        flex: none;
+        width: var(--height-token-nav-row, 36px);
+        height: var(--height-token-nav-row, 36px);
+        padding: 0;
+        margin-top: 8px;
+        border-radius: var(--radius-token-row, 10px);
+        -webkit-app-region: no-drag;
+      }
+      #${ENTRY_ID}[data-codex-panel-rail="true"]:hover {
+        background: var(--color-token-list-hover-background, color-mix(in srgb, currentColor 8%, transparent));
+      }
+      #${ENTRY_ID}[data-codex-panel-rail="true"] svg {
+        width: 20px;
+        height: 20px;
+      }
       #${ENTRY_ID}[aria-current="page"] {
         background: var(--color-token-list-hover-background, color-mix(in srgb, currentColor 8%, transparent));
       }
@@ -392,8 +412,10 @@
     `;
   }
 
-  function createEntry(reference) {
-    const button = reference.cloneNode(true);
+  function createEntry(reference, rail = false) {
+    // 图标栏使用独立按钮，避免继承原生拖拽、提示点和导航属性。
+    const button = rail ? document.createElement("button") : reference.cloneNode(true);
+    if (rail) button.className = reference.className;
     button.id = ENTRY_ID;
     button.type = "button";
     button.removeAttribute("disabled");
@@ -422,6 +444,10 @@
       button.replaceChildren(...(icon ? [icon, label] : [label]));
     } else button.textContent = "任务面板";
     replaceEntryIcon(button);
+    if (rail) {
+      button.setAttribute("data-codex-panel-rail", "true");
+      button.replaceChildren(button.querySelector("svg"));
+    }
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -450,8 +476,28 @@
   function ensureEntry() {
     if (destroyed || !document.body) return;
     installStyles();
+    // 左侧图标栏独立于展开的内容侧边栏；挂在可滚动导航区末尾、头像区之前。
+    const rail = Array.from(document.querySelectorAll("[data-app-navigation-rail]"))
+      .find((node) => !node.closest("[inert], [hidden]") && node.getBoundingClientRect().height > 0);
+    const railReference = Array.from(rail?.querySelectorAll("[data-sidebar-destination]") || [])
+      .find((node) => node.getBoundingClientRect().height > 0);
+    const railList = railReference?.closest(".overflow-y-auto");
+    if (railList && rail.contains(railList)) {
+      if (entry?.getAttribute("data-codex-panel-rail") !== "true") {
+        entry?.remove();
+        entry = createEntry(railReference, true);
+      }
+      if (entry.parentElement !== railList) railList.appendChild(entry);
+      syncEntryState();
+      return;
+    }
     const reference = findReferenceButton();
     if (!reference?.parentElement) return;
+    // 没有图标栏的旧布局继续沿用原入口，不将图标样式带入文字导航。
+    if (entry?.getAttribute("data-codex-panel-rail") === "true") {
+      entry.remove();
+      entry = null;
+    }
     // 新聊天按钮可能只是横向行的一部分；在整行之后挂载，不能挤入快速聊天所在的行内。
     const row = reference.parentElement.closest(".sidebar-item") || reference;
     if (!entry) entry = createEntry(reference);
