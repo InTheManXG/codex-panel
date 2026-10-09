@@ -438,3 +438,8 @@ Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标�
 
 - 生命周期：等待上游吸收；内部兼容修复。输入框模块可能延迟执行，不能把未执行等同于适配未准备。quota runtime 在 importmap 插入成功后记录 `prepared`，重复执行仅同步设置；连接重试在同一源码且映射已准备时不再刷新 Codex。首次准备、源码变化仍保留必要重载，`installed` 继续只表示原生模块实际执行。
 - 代码：`scripts/codex-provider-quota.mjs`、`scripts/codex-injector.mjs`、`scripts/codex-injector-runtime.mjs`。验证：`node --test test/injector-host-runtime.test.mjs test/codex-provider-quota.test.mjs test/injector.test.mjs`，覆盖首页未加载模块的连续重试不刷新、映射仅安装一次及首次刷新保留。用户确认退出 Panel 后跳转停止；现场日志存在侧边栏未挂载重试，修复后真实页面行为仍待新包确认。上游具备等价状态区分后移除。
+
+### 多侧边栏入口定位
+
+- 生命周期：等待上游吸收。新版侧边栏通过 `inert` 切换可交互状态；入口遍历侧边栏并跳过 inert、hidden 或无高度节点，旧滚动区域及 Free 账号新聊天入口同样过滤。监听 inert/hidden 变化，在原生切换后迁移同一个入口，不覆盖新聊天。
+- 代码：`inject/codex-panel.user.js`；验证：`test/codex-sidebar-mount.test.mjs` 覆盖前置 inert 侧边栏、激活切换、唯一入口与点击；`test/inject.test.mjs` 保留旧布局与本地化定位覆盖。该改动解决已复现的选择器缺陷，实际更新后窗口中的恢复效果仍待用户确认。

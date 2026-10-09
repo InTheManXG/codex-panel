@@ -299,6 +299,8 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
   let currentButtons;
   let currentSection;
   const scroll = {
+    closest: () => null,
+    getBoundingClientRect: () => ({height: 30}),
     querySelector: (selector) => selector === "[data-app-action-sidebar-section]" ? currentSection : null,
     querySelectorAll: (selector) => selector.startsWith("button") ? currentButtons : [],
   };
@@ -309,12 +311,14 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
     ${referenceSource}
     return findReferenceButton;
   })()`, {
-    document: { querySelector: () => scroll },
+    document: { querySelectorAll: selector => selector === "[data-app-action-sidebar-scroll]" ? [scroll] : [] },
   });
 
   for (const textContent of ["插件", "外掛程式", "プラグイン", "Plugins"]) {
     const currentButton = {
       textContent,
+      closest: () => null,
+      getBoundingClientRect: () => ({height: 30}),
       getAttribute: () => null,
       parentElement: {},
     };
@@ -325,6 +329,7 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
 
   const topButton = (textContent, top, owned = false) => ({
     textContent,
+    closest: () => null,
     getAttribute: (name) => name === "data-codex-panel-owned" && owned ? "true" : null,
     getBoundingClientRect: () => ({ top, bottom: top + 30, height: 30 }),
     parentElement: {},

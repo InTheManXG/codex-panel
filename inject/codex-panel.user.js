@@ -327,16 +327,21 @@
   }
 
   function findReferenceButton() {
-    const sidebar = document.querySelector("[data-slate-sidebar-content]");
+    // 新版可能保留多个侧边栏；跳过隐藏或 inert 的旧节点，不能只检查第一个。
+    const available = (node) => !node.closest("[inert], [hidden]")
+      && node.getBoundingClientRect().height > 0;
+    const sidebar = Array.from(document.querySelectorAll("[data-slate-sidebar-content]"))
+      .find(available);
     const destinations = Array.from(sidebar?.querySelectorAll("[data-sidebar-destination]") || [])
       .filter((node) => node.getAttribute(OWNED_ATTRIBUTE) !== "true"
-        && !node.closest("[inert]") && node.getBoundingClientRect().height > 0);
+        && available(node));
     if (destinations.length > 0) {
       return destinations.find((node) => buttonMatches(node, PLUGIN_LABELS)) || destinations.at(-1);
     }
-    const scroll = document.querySelector("[data-app-action-sidebar-scroll]");
+    const scroll = Array.from((sidebar || document).querySelectorAll("[data-app-action-sidebar-scroll]"))
+      .find(available);
     const buttons = Array.from(scroll?.querySelectorAll('button, a.sidebar-item, [role="button"].sidebar-item') || [])
-      .filter((button) => button.getAttribute(OWNED_ATTRIBUTE) !== "true");
+      .filter((button) => button.getAttribute(OWNED_ATTRIBUTE) !== "true" && available(button));
     const plugin = buttons.find((button) => buttonMatches(button, PLUGIN_LABELS));
     if (plugin) return plugin;
 
@@ -350,10 +355,10 @@
     if (reference) return reference;
 
     // Free 账号可能没有插件、宠物或 destination 行；仅在主侧边栏内借用新聊天入口。
-    const root = sidebar || document.querySelector("aside");
+    const root = sidebar || Array.from(document.querySelectorAll("aside")).find(available);
     return Array.from(root?.querySelectorAll('button, a, [role="button"]') || [])
       .find((node) => node.getAttribute(OWNED_ATTRIBUTE) !== "true"
-        && !node.closest("[inert]") && node.getBoundingClientRect().height > 0
+        && available(node)
         && buttonMatches(node, ["新聊天", "新对话", "新增聊天", "新對話", "new chat", "new thread"])) || null;
   }
 
@@ -2516,6 +2521,9 @@
       subtree: true,
       attributes: true,
       attributeFilter: [
+        // 侧边栏切换可能只更新可交互状态，不增删节点；此时也要重新挂载入口。
+        "inert",
+        "hidden",
         "class",
         "data-theme",
         "data-color-theme",

@@ -135,3 +135,23 @@ test("nested New chat row keeps original actions and mounts Panel as a separate 
     assert.equal(newChats, 1);
   } finally { f.dom.window.close(); }
 });
+
+// 新版保留不可交互的侧边栏时，入口必须落在当前可用侧边栏而非第一个节点。
+test("mount skips retained inert sidebars and follows the active sidebar", () => {
+  const f = fixture(`<div data-slate-sidebar-content inert><button data-sidebar-destination="plugins">Plugins</button></div>
+    <div data-slate-sidebar-content><button data-sidebar-destination="plugins">Plugins</button></div>`);
+  try {
+    const roots = f.dom.window.document.querySelectorAll('[data-slate-sidebar-content]');
+    f.api.ensureEntry();
+    const entry = f.dom.window.document.getElementById('codex-panel-entry');
+    assert.ok(entry);
+    assert.equal(entry.parentElement, roots[1]);
+    roots[1].setAttribute('inert', '');
+    roots[0].removeAttribute('inert');
+    f.api.ensureEntry();
+    assert.equal(entry.parentElement, roots[0]);
+    assert.equal(f.dom.window.document.querySelectorAll('#codex-panel-entry').length, 1);
+    entry.click();
+    assert.equal(f.opened, 1);
+  } finally { f.dom.window.close(); }
+});
