@@ -771,3 +771,23 @@ test("attach reloads only when the required quota adapter has not executed", asy
     assert.deepEqual(calls, installed ? ["evaluate", "publish", "open"] : ["reload", "evaluate", "publish", "open"]);
   }
 });
+
+// 首页尚未加载输入框模块时，已准备的映射不能被重试误判为失败并反复刷新页面。
+test("attach preserves the home route while the prepared composer module is still lazy", async () => {
+  let route = "/";
+  let reloads = 0;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await reconcileInjectionRuntime({
+      currentStatus: {sourceHash: "same", providerQuotaInstalled: false, providerQuotaPrepared: true},
+      source: "source", sourceHash: "same", requiresQuotaFix: true,
+      removeRegisteredSource: async () => {},
+      registerCurrentSource: async () => "registration",
+      reloadRenderer: async () => { reloads += 1; route = "/spaces/last-opened"; },
+      evaluateCurrentSource: async () => {},
+      publishRegistration: async () => {},
+      reopen: async () => assert.fail("background retry must not open Panel"),
+    });
+  }
+  assert.equal(reloads, 0);
+  assert.equal(route, "/");
+});

@@ -2307,6 +2307,7 @@ async function readInjectionStatus(cdp) {
       version: window.__codexPanelInjection__?.version || null,
       sourceHash: window.__codexPanelInjection__?.sourceHash || null,
       providerQuotaInstalled: globalThis.__codexPanelProviderQuotaV1__?.installed === true,
+      providerQuotaPrepared: globalThis.__codexPanelProviderQuotaV1__?.prepared === true,
       scriptIdentifier: window[${JSON.stringify(injectionScriptIdentifierName)}] || null,
       entryMounted: Boolean(document.getElementById("codex-panel-entry")),
       pageMounted: Boolean(document.getElementById("codex-panel-page")),

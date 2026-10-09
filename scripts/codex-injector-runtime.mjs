@@ -473,9 +473,9 @@ export async function reconcileInjectionRuntime({
     } catch {}
   }
   const scriptIdentifier = await registerCurrentSource(source);
-  // 重试沿用已执行的模块；只有源码变化或适配尚未安装时才重载原生页面。
+  // 输入框模块在首页可能尚未执行；已准备映射的重试不能刷新并恢复到其他页面。
   const replaced = currentStatus.sourceHash !== sourceHash;
-  if (replaced || (requiresQuotaFix && !currentStatus.providerQuotaInstalled)) {
+  if (replaced || (requiresQuotaFix && !currentStatus.providerQuotaInstalled && !currentStatus.providerQuotaPrepared)) {
     await reloadRenderer();
   }
   await evaluateCurrentSource(source);
