@@ -232,8 +232,14 @@
         height: var(--height-token-nav-row, 36px);
         padding: 0;
         margin-top: 8px;
+        color: var(--color-text-tertiary, var(--color-token-text-secondary, #888));
+        background: transparent;
         border-radius: var(--radius-token-row, 10px);
         -webkit-app-region: no-drag;
+      }
+      #${ENTRY_ID}[data-codex-panel-rail="true"][aria-current="page"] {
+        color: var(--color-text-primary, var(--color-token-foreground, #222));
+        background: var(--color-token-list-hover-background, color-mix(in srgb, currentColor 8%, transparent));
       }
       #${ENTRY_ID}[data-codex-panel-rail="true"]:hover {
         background: var(--color-token-list-hover-background, color-mix(in srgb, currentColor 8%, transparent));
@@ -260,6 +266,9 @@
       [${HIDDEN_ATTRIBUTE}="true"] {
         visibility: hidden !important;
         pointer-events: none !important;
+      }
+      [data-app-navigation-rail] [${NATIVE_SELECTED_ATTRIBUTE}="true"] {
+        color: var(--color-text-tertiary, var(--color-token-text-secondary, #888)) !important;
       }
       [${NATIVE_SELECTED_ATTRIBUTE}="true"] {
         background-color: transparent !important;
@@ -539,7 +548,7 @@
 
   function muteNativeSelection() {
     if (!active) return;
-    document.querySelectorAll('aside nav[role="navigation"] [aria-current]')
+    document.querySelectorAll('aside nav[role="navigation"] [aria-current], [data-app-navigation-rail] [aria-current], [data-app-navigation-rail] [data-selected]')
       .forEach((node) => {
         if (node === entry || node.closest(`#${ENTRY_ID}`)) return;
         if (!mutedNativeSelections.has(node)) {
@@ -553,7 +562,8 @@
   function restoreNativeSelection() {
     mutedNativeSelections.forEach((ariaCurrent, node) => {
       if (!node.isConnected) return;
-      node.setAttribute("aria-current", ariaCurrent);
+      if (ariaCurrent === null) node.removeAttribute("aria-current");
+      else node.setAttribute("aria-current", ariaCurrent);
       node.removeAttribute(NATIVE_SELECTED_ATTRIBUTE);
     });
     mutedNativeSelections.clear();
@@ -2508,6 +2518,14 @@
     void publishPendingThreadAssociation();
   }
 
+  function onNativeRailClick(event) {
+    if (!active || destroyed) return;
+    const destination = event.target?.closest?.("[data-app-navigation-rail] [data-sidebar-destination]");
+    if (!destination || destination.closest(`#${ENTRY_ID}`)) return;
+    // 首页可能已经是底层路由，原生点击不会产生导航事件；先关闭覆盖层，再交还原生点击。
+    closePanel(false);
+  }
+
   function openPanel() {
     if (destroyed || active) return;
     if (!connectNativeNavigation()) {
@@ -2608,6 +2626,7 @@
     pendingThreadCreation = null;
     pendingThreadAssociation = null;
     document.removeEventListener("DOMContentLoaded", mount);
+    document.removeEventListener("click", onNativeRailClick, true);
     document.removeEventListener("click", markPendingThreadAssociationSubmitted, true);
     document.removeEventListener("keydown", markPendingThreadAssociationSubmitted, true);
     window.removeEventListener("message", onFrameMessage);
@@ -2651,6 +2670,7 @@
   window.addEventListener("message", onFrameMessage);
   window.addEventListener("message", onHostBridgeMessage);
   window.addEventListener("resize", scheduleRefresh);
+  document.addEventListener("click", onNativeRailClick, true);
   document.addEventListener("click", markPendingThreadAssociationSubmitted, true);
   document.addEventListener("keydown", markPendingThreadAssociationSubmitted, true);
   if (document.documentElement) mount();

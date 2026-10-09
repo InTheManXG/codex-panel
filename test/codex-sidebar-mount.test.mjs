@@ -177,3 +177,35 @@ test("Panel lives in the navigation rail and opens when the content sidebar is c
     assert.equal(f.opened, 1);
   } finally { f.dom.window.close(); }
 });
+
+test("native Home click closes Panel even when no route navigation occurs", () => {
+  const dom = new JSDOM('<nav data-app-navigation-rail><button data-sidebar-destination="home" aria-current="page" data-selected><svg></svg></button><button id="codex-panel-entry"></button></nav>');
+  try {
+    const {document} = dom.window;
+    const home = document.querySelector('[data-sidebar-destination]');
+    const entry = document.getElementById('codex-panel-entry');
+    const selection = source.slice(source.indexOf('  function muteNativeSelection()'), source.indexOf('  function hideNativeHeader()'));
+    const click = source.slice(source.indexOf('  function onNativeRailClick('), source.indexOf('  function openPanel()'));
+    const close = source.slice(source.indexOf('  function closePanel('), source.indexOf('  function showPanel()'));
+    const sync = source.slice(source.indexOf('  function syncEntryState()'), source.indexOf('  function ensureEntry()'));
+    const api = vm.runInNewContext(`let active=true, destroyed=false, openGeneration=0, page={hidden:false}, lastFocusedElement=null, hostContextSnapshot=null;
+      const ENTRY_ID='codex-panel-entry', NATIVE_SELECTED_ATTRIBUTE='data-codex-panel-native-selected', mutedNativeSelections=new Map();
+      ${selection}${sync}${close}${click}
+      ({muteNativeSelection,onNativeRailClick,isActive:()=>active,hidden:()=>page.hidden})`, {
+      document,entry,restoreNativeContent(){},restoreNativeBrowserPanel(){},
+    });
+    api.muteNativeSelection();
+    assert.equal(home.hasAttribute('aria-current'), false);
+    assert.equal(home.getAttribute('data-codex-panel-native-selected'), 'true');
+    document.addEventListener('click',api.onNativeRailClick,true);
+    let nativeClick = false;
+    home.addEventListener('click', () => {nativeClick=true;});
+    home.querySelector('svg').dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));
+    assert.equal(api.isActive(),false);
+    assert.equal(api.hidden(),true);
+    assert.equal(entry.hasAttribute('aria-current'),false);
+    assert.equal(home.getAttribute('aria-current'),'page');
+    assert.equal(home.hasAttribute('data-codex-panel-native-selected'),false);
+    assert.equal(nativeClick,true);
+  } finally {dom.window.close();}
+});
