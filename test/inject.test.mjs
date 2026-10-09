@@ -238,17 +238,17 @@ test("embedded page supports ordinary loopback and authenticated opaque modes", 
   assert.doesNotMatch(source, /allow-same-origin/);
 });
 
-test("entry clones the native Plugins row and the page covers the complete Codex workspace", () => {
-  assert.match(source, /const PLUGIN_LABELS = \["插件", "外掛程式", "plugins", "プラグイン"\]/);
-  assert.match(source, /if \(plugin\) return plugin;/);
+test("entry clones the native Explore rail button and the page covers the complete Codex workspace", () => {
+  assert.match(source, /const EXPLORE_LABELS = \["探索", "explore"\]/);
+  assert.match(source, /document\.querySelectorAll\("nav\[data-app-navigation-rail\]"\)/);
   assert.match(source, /button\.getAttribute\(OWNED_ATTRIBUTE\) !== "true"/);
-  assert.match(source, /rect\.bottom <= sectionTop/);
+
   assert.match(source, /const button = rail \? document\.createElement\("button"\) : reference\.cloneNode\(true\)/);
-  assert.match(source, /row\.after\(entry\)/);
+  assert.match(source, /reference\.before\(entry\)/);
   assert.match(source, /viewport\.querySelector\("\.app-shell-main-content-frame"\)/);
-  assert.match(source, /const surface = viewport\?\.parentElement/);
+  assert.match(source, /const workspace = viewport\?\.closest\("\[data-app-shell-workspace-row\]"\)/);
   assert.match(source, /surface\.appendChild\(page\)/);
-  assert.match(source, /#\$\{PAGE_ID\} \{[\s\S]*?top: 0;/);
+  assert.match(source, /#\$\{PAGE_ID\} \{[\s\S]*?top: var\(--app-shell-titlebar-height, 0px\);/);
   assert.doesNotMatch(source, /--codex-panel-top-offset/);
   assert.match(source, /child\.setAttribute\(HIDDEN_ATTRIBUTE, "true"\)/);
   assert.match(source, /page\.hidden = false/);
@@ -257,37 +257,7 @@ test("entry clones the native Plugins row and the page covers the complete Codex
   assert.doesNotMatch(source, /aria-modal/);
 });
 
-test("conversation content frames can host Panel when they include the native header", () => {
-  const findPageHostSource = source.slice(
-    source.indexOf("function findPageHost"),
-    source.indexOf("function findPageMount"),
-  );
-  const conversationFrame = {
-    kind: "conversation-frame",
-    getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
-  };
-  const viewport = {
-    children: [conversationFrame],
-    querySelector: () => null,
-    getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
-  };
-  const nativeHeader = {
-    getBoundingClientRect: () => ({ bottom: 48 }),
-  };
-  const document = {
-    querySelectorAll: () => [{ getBoundingClientRect: () => ({ width: 0, height: 0 }) }, viewport],
-    querySelector: (selector) => {
-      if (selector === "[data-app-shell-main-content-layout]") return viewport;
-      if (selector === "main > header") return nativeHeader;
-      return null;
-    },
-  };
-  const findPageHost = vm.runInNewContext(`(${findPageHostSource})`, { document, page: null });
-
-  assert.equal(findPageHost().kind, "conversation-frame");
-});
-
-test("entry recognizes known Plugins labels and structurally anchors an unenumerated locale", () => {
+test("entry recognizes the Explore rail labels", () => {
   const normalizedLabelSource = source.slice(
     source.indexOf("function normalizedLabel"),
     source.indexOf("\n\n  function normalizeThreadId"),
@@ -297,67 +267,45 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
     source.indexOf("\n\n  function replaceEntryIcon"),
   );
   let currentButtons;
-  let currentSection;
-  const scroll = {
-    closest: () => null,
-    getBoundingClientRect: () => ({height: 30}),
-    querySelector: (selector) => selector === "[data-app-action-sidebar-section]" ? currentSection : null,
+  const rail = {
+    closest: () => null, getBoundingClientRect: () => ({height: 30}),
     querySelectorAll: (selector) => selector.startsWith("button") ? currentButtons : [],
   };
   const findReferenceButton = vm.runInNewContext(`(() => {
-    const PLUGIN_LABELS = ["插件", "外掛程式", "plugins", "プラグイン"];
+    const EXPLORE_LABELS = ["探索", "explore"];
     const OWNED_ATTRIBUTE = "data-codex-panel-owned";
     ${normalizedLabelSource}
     ${referenceSource}
     return findReferenceButton;
   })()`, {
-    document: { querySelectorAll: selector => selector === "[data-app-action-sidebar-scroll]" ? [scroll] : [] },
+    document: { querySelector: () => rail, querySelectorAll: selector => selector === "nav[data-app-navigation-rail]" ? [rail] : [] },
   });
 
-  for (const textContent of ["插件", "外掛程式", "プラグイン", "Plugins"]) {
+  for (const textContent of ["探索", "Explore"]) {
     const currentButton = {
-      textContent,
-      closest: () => null,
-      getBoundingClientRect: () => ({height: 30}),
+      querySelector: (selector) => selector === ".sr-only" ? { textContent } : null,
       getAttribute: () => null,
       parentElement: {},
     };
     currentButtons = [currentButton];
-    currentSection = null;
     assert.equal(findReferenceButton(), currentButton);
   }
 
-  const topButton = (textContent, top, owned = false) => ({
-    textContent,
-    closest: () => null,
-    getAttribute: (name) => name === "data-codex-panel-owned" && owned ? "true" : null,
-    getBoundingClientRect: () => ({ top, bottom: top + 30, height: 30 }),
-    parentElement: {},
-  });
-  const unenumeratedPlugin = topButton("Приклучоци", 160);
-  currentButtons = [
-    topButton("Барања за повлекување", 100),
-    topButton("Локации", 120),
-    topButton("Закажано", 140),
-    unenumeratedPlugin,
-    topButton("Panel", 180, true),
-  ];
-  currentSection = { getBoundingClientRect: () => ({ top: 200 }) };
-  assert.equal(findReferenceButton(), unenumeratedPlugin);
+
 });
 
-test("opening Panel suppresses native selection and contextual header until close", () => {
-  assert.match(source, /aside nav\[role="navigation"\] \[aria-current\]/);
-  assert.match(source, /node\.removeAttribute\("aria-current"\)/);
-  assert.match(source, /NATIVE_SELECTED_ATTRIBUTE/);
-  assert.match(source, /app-shell-header-context-menu-surface/);
-  assert.match(source, /restoreNativeSelection\(\)/);
-  assert.match(source, /function syncNativeNavigation[\s\S]*closePanel\(false\)/);
+test("opening Panel preserves native selection and the titlebar", () => {
+  assert.doesNotMatch(source, /mutedNativeSelections|hideNativeHeader/);
+  assert.doesNotMatch(source, /node\.removeAttribute\("aria-current"\)/);
+  assert.match(source, /syncNativeRailIcons\(\)/);
+  assert.match(source, /restoreNativeRailIcons\(\)/);
+  assert.match(source, /destination\?\.getAttribute\("aria-current"\) !== "page"/);
+  assert.match(source, /function onDocumentClick[\s\S]*event\.stopPropagation\(\)[\s\S]*nativeNavigator\.push\(/);
 });
 
-test("the embedded header fills the native titlebar without clipping or a full-page no-drag region", () => {
-  assert.match(source, /top: 0;/);
-  assert.match(source, /z-index: 31 !important/);
+test("the embedded page sits below the native titlebar without a full-page no-drag region", () => {
+  assert.match(source, /top: var\(--app-shell-titlebar-height, 0px\);/);
+  assert.doesNotMatch(source, /z-index: 31 !important/);
   assert.doesNotMatch(source, /headerRightInset/);
   assert.doesNotMatch(source, /NATIVE_HEADER_RIGHT_INSET/);
   assert.doesNotMatch(source, /clip-path: polygon/);
@@ -438,14 +386,7 @@ test("the injected iframe can be cache-busted without reloading the Codex shell"
   assert.match(source, /reloadFrame,/);
 });
 
-test("private Panel uses CDP while ordinary Panel retains loopback permission", () => {
-  assert.match(source, /requestHostLoadFrame\(frameRequest\)/);
-  assert.match(source, /if \(usesPrivateFrame\(\)\) await requestHostLoadFrame\(frameRequest\)/);
-  assert.match(source, /local-network-access; loopback-network; local-network/);
-  assert.match(source, /if \(!usesPrivateFrame\(\)\)[\s\S]*?panel:frame-awaiting-challenge[\s\S]*?postFrameChallenge\(\)/);
-});
-
-test("reopening reuses a ready cache-busted iframe without showing the startup placeholder", () => {
+test("reopening captures the current identity before showing a reused cache-busted iframe", () => {
   assert.match(source, /function frameMatchesPanelUrl\(panelUrl\)/);
   assert.match(source, /loadedUrl\.searchParams\.delete\(FRAME_REFRESH_PARAM\)/);
   assert.match(source, /expectedUrl\.searchParams\.delete\(FRAME_REFRESH_PARAM\)/);
@@ -453,13 +394,12 @@ test("reopening reuses a ready cache-busted iframe without showing the startup p
     source.indexOf("async function preparePanel"),
     source.indexOf("function restoreNativeContent"),
   );
-  assert.match(prepareSource, /const canReuseFrame = Boolean\([\s\S]*frameMatchesPanelUrl\(panelUrl\)/);
-  assert.match(prepareSource, /if \(canReuseFrame\) showFrame\(\);\s*else showLoading\(\);/);
+  assert.match(prepareSource, /showLoading\(\);[\s\S]*captureHostContext\(\)/);
+  assert.match(prepareSource, /currentCodexUser = context\?\.user \?\? null;[\s\S]*showFrame\(\);/);
   assert.match(
     prepareSource,
     /if \(!frameReady \|\| result\.restarted \|\| !frameMatchesPanelUrl\(panelUrl\)\) \{\s*showLoading\(\);/,
   );
-  assert.doesNotMatch(prepareSource, /async function preparePanel\(generation\) \{\s*showLoading\(\);/);
 });
 
 test("iframe messages require both the exact origin and source window", () => {
@@ -1785,14 +1725,15 @@ test("Panel participates in the native memory router and restores its original m
   const { document } = dom.window;
   const native = document.getElementById("native");
   const panel = document.getElementById("panel");
-  const entries = [{ pathname: "/local/task-1", search: "?view=review", hash: "", state: { prefillPrompt: "do not replay" } }];
+  let nextKey = 0;
+  const entries = [{ key: "initial", pathname: "/local/task-1", search: "?view=review", hash: "", state: { prefillPrompt: "do not replay" } }];
   let index = 0, renderCount = 0;
   const render = () => { native.textContent = navigator.location.pathname; renderCount++; };
   // Same contract as Codex's MemoryRouter: one React listener; location changes synchronously.
   const navigator = {
     get location() { return entries[index]; },
-    push(path, state) { entries.splice(++index, entries.length, { ...path, state }); render(); },
-    replace(path, state) { entries[index] = { ...path, state }; render(); },
+    push(path, state) { entries.splice(++index, entries.length, { ...path, state, key: String(++nextKey) }); render(); },
+    replace(path, state) { entries[index] = { ...path, state, key: String(++nextKey) }; render(); },
     go(delta) { index = Math.max(0, Math.min(entries.length - 1, index + delta)); render(); },
     listen() { throw Error("must not replace React's listener"); },
   };
@@ -1803,8 +1744,8 @@ test("Panel participates in the native memory router and restores its original m
   const start = source.indexOf("  function connectNativeNavigation()");
   const end = source.indexOf("  function scheduleRefresh()", start);
   const api = vm.runInNewContext(`(() => {
-    let nativeRailDismissedPanel = false;
     let nativeNavigator = null, detachNativeNavigation = null, lastNativeLocation = null, active = false, destroyed = false, lastNativeThreadId = "";
+    const panelLocationKeys = new Set(); let pendingPanelNavigation = false;
     const PANEL_ROUTE_STATE = "__codexPanel";
     const normalizeThreadId = value => value;
     const publishPendingThreadAssociation = () => {};
@@ -1862,8 +1803,106 @@ test("Panel participates in the native memory router and restores its original m
   }
 });
 
+test("conversation content frames can host Panel when they include the native header", () => {
+  const findPageHostSource = source.slice(
+    source.indexOf("function findPageHost"),
+    source.indexOf("function findPageMount"),
+  );
+  const conversationFrame = {
+    kind: "conversation-frame",
+    getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
+  };
+  const viewport = {
+    children: [conversationFrame],
+    querySelector: () => null,
+    getBoundingClientRect: () => ({ top: 0, width: 1_000, height: 800 }),
+  };
+  const nativeHeader = {
+    getBoundingClientRect: () => ({ bottom: 48 }),
+  };
+  const document = {
+    querySelectorAll: () => [{ getBoundingClientRect: () => ({ width: 0, height: 0 }) }, viewport],
+    querySelector: (selector) => {
+      if (selector === "[data-app-shell-main-content-layout]") return viewport;
+      if (selector === "main > header") return nativeHeader;
+      return null;
+    },
+  };
+  const findPageHost = vm.runInNewContext(`(${findPageHostSource})`, { document, page: null });
+
+  assert.equal(findPageHost().kind, "conversation-frame");
+});
+
+
+test("private Panel uses CDP while ordinary Panel retains loopback permission", () => {
+  assert.match(source, /requestHostLoadFrame\(frameRequest\)/);
+  assert.match(source, /if \(usesPrivateFrame\(\)\) await requestHostLoadFrame\(frameRequest\)/);
+  assert.match(source, /local-network-access; loopback-network; local-network/);
+  assert.match(source, /if \(!usesPrivateFrame\(\)\)[\s\S]*?panel:frame-awaiting-challenge[\s\S]*?postFrameChallenge\(\)/);
+});
+
+
+test("entry recognizes known Plugins labels and structurally anchors an unenumerated locale", () => {
+  const normalizedLabelSource = source.slice(
+    source.indexOf("function normalizedLabel"),
+    source.indexOf("\n\n  function normalizeThreadId"),
+  );
+  const referenceSource = source.slice(
+    source.indexOf("function buttonMatches"),
+    source.indexOf("\n\n  function replaceEntryIcon"),
+  );
+  let currentButtons;
+  let currentSection;
+  const scroll = {
+    closest: () => null, getBoundingClientRect: () => ({height:30}),
+    querySelector: (selector) => selector === "[data-app-action-sidebar-section]" ? currentSection : null,
+    querySelectorAll: (selector) => selector.startsWith("button") ? currentButtons : [],
+  };
+  const findReferenceButton = vm.runInNewContext(`(() => {
+    const EXPLORE_LABELS = ["探索", "explore"];
+    const PLUGIN_LABELS = ["插件", "外掛程式", "plugins", "プラグイン"];
+    const OWNED_ATTRIBUTE = "data-codex-panel-owned";
+    ${normalizedLabelSource}
+    ${referenceSource}
+    return findReferenceButton;
+  })()`, {
+    document: { querySelectorAll: (selector) => selector === "[data-app-action-sidebar-scroll]" ? [scroll] : [] },
+  });
+
+  for (const textContent of ["插件", "外掛程式", "プラグイン", "Plugins"]) {
+    const currentButton = {
+      textContent,
+      closest: () => null, getBoundingClientRect: () => ({height:30}),
+      getAttribute: () => null,
+      parentElement: {},
+    };
+    currentButtons = [currentButton];
+    currentSection = null;
+    assert.equal(findReferenceButton(), currentButton);
+  }
+
+  const topButton = (textContent, top, owned = false) => ({
+    textContent,
+    closest: () => null,
+    getAttribute: (name) => name === "data-codex-panel-owned" && owned ? "true" : null,
+    getBoundingClientRect: () => ({ top, bottom: top + 30, height: 30 }),
+    parentElement: {},
+  });
+  const unenumeratedPlugin = topButton("Приклучоци", 160);
+  currentButtons = [
+    topButton("Барања за повлекување", 100),
+    topButton("Локации", 120),
+    topButton("Закажано", 140),
+    unenumeratedPlugin,
+    topButton("Panel", 180, true),
+  ];
+  currentSection = { getBoundingClientRect: () => ({ top: 200 }) };
+  assert.equal(findReferenceButton(), unenumeratedPlugin);
+});
+
 test("Panel follows Data Router navigation without navigator.location and unsubscribes", async () => {
-  const entries = [{ pathname: "/local/task-1", search: "", hash: "", state: null }];
+  let nextKey = 0;
+  const entries = [{ key: "initial", pathname: "/local/task-1", search: "", hash: "", state: null }];
   let index = 0;
   const listeners = new Set();
   const router = {
@@ -1873,7 +1912,7 @@ test("Panel follows Data Router navigation without navigator.location and unsubs
       // 模拟新版导航异步提交，不能把调用 navigate 当成页面已经切换。
       await Promise.resolve();
       if (typeof path === "number") index += path;
-      else entries.splice(++index, entries.length, { ...path, state: options?.state });
+      else entries.splice(++index, entries.length, { ...path, state: options?.state, key: String(++nextKey) });
       listeners.forEach((listener) => listener(router.state));
     },
   };
@@ -1884,9 +1923,9 @@ test("Panel follows Data Router navigation without navigator.location and unsubs
   const start = source.indexOf("  function connectNativeNavigation()");
   const end = source.indexOf("  function scheduleRefresh()", start);
   const api = vm.runInNewContext(`(() => {
-    let nativeRailDismissedPanel = false;
     let nativeNavigator = null, detachNativeNavigation = null, lastNativeLocation = null;
     let active = false, destroyed = false, lastNativeThreadId = "";
+    const panelLocationKeys = new Set(); let pendingPanelNavigation = false;
     const PANEL_ROUTE_STATE = "__codexPanel";
     const normalizeThreadId = (id) => id;
     function showPanel() { active = true; }
@@ -1912,7 +1951,6 @@ test("Panel follows Data Router navigation without navigator.location and unsubs
   assert.equal(listeners.size, 0);
 });
 
-
 test("Panel replaces a cloned pet avatar with its own board icon", async () => {
   const { JSDOM } = await import("jsdom");
   const dom = new JSDOM('<button><span class="icon-leading-slot"><div data-codex-pet-id="pet" style="background-image:url(pet.png)"></div></span><span>任务面板</span></button>');
@@ -1926,51 +1964,11 @@ test("Panel replaces a cloned pet avatar with its own board icon", async () => {
     assert.equal(button.querySelector("[data-codex-pet-id]"), null);
     assert.equal(button.querySelector("svg").namespaceURI, "http://www.w3.org/2000/svg");
     assert.equal(button.querySelector("svg").getAttribute("aria-hidden"), "true");
-    assert.equal(button.querySelectorAll("svg rect, svg path").length, 2);
+    assert.equal(button.querySelectorAll("svg rect, svg path").length, 3);
     replaceIcon(button);
     assert.equal(button.querySelectorAll("svg").length, 1);
     assert.equal(button.textContent.trim(), "任务面板");
   } finally {
     dom.window.close();
-  }
-});
-
-test("Panel -> Spaces -> Home does not restore the dismissed Panel route state", async () => {
-  for (const asyncCommit of [false, true]) {
-    let location = {pathname:'/', search:'', hash:'', state:null};
-    const listeners = new Set();
-    const router = {
-      get state(){return {location};},
-      subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
-      async navigate(path, options){
-        if(asyncCommit) await Promise.resolve();
-        location = {...path,state:options?.state};
-        listeners.forEach(fn=>fn());
-      },
-    };
-    const surface = {__reactFiber$test:{memoizedProps:{router},return:null}};
-    const start = source.indexOf('  function connectNativeNavigation()');
-    const end = source.indexOf('  function scheduleRefresh()',start);
-    const api = vm.runInNewContext(`let nativeNavigator=null, detachNativeNavigation=null, lastNativeLocation=null;
-      let active=false, destroyed=false, lastNativeThreadId='', nativeRailDismissedPanel=false;
-      const PANEL_ROUTE_STATE='__codexPanel', ENTRY_ID='codex-panel-entry';
-      const normalizeThreadId=x=>x, publishPendingThreadAssociation=()=>{};
-      const showPanel=()=>{active=true;}, closePanel=()=>{active=false;};
-      ${source.slice(start,end)}
-      ({openPanel,onNativeRailClick,syncNativeNavigation,visible:()=>active})`, {document:{querySelector:()=>surface}});
-    const railClick = () => api.onNativeRailClick({target:{closest:()=>({closest:()=>null})}});
-    api.openPanel();await Promise.resolve();
-    assert.equal(api.visible(),true);
-    const savedHome = {...location};
-    railClick();
-    await router.navigate({pathname:'/spaces/test',search:'',hash:''});
-    assert.equal(api.visible(),false);
-    railClick();
-    // 原生目的地恢复之前的首页位置时可能原样携带 Panel 写入的 state。
-    await router.navigate(savedHome,{state:savedHome.state});
-    api.syncNativeNavigation();
-    assert.equal(api.visible(),false,'returning Home must not restore Panel');
-    api.openPanel();await Promise.resolve();
-    assert.equal(api.visible(),true,'explicit Panel click must still work');
   }
 });

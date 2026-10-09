@@ -21,33 +21,21 @@ This file records user-visible changes introduced by the fork.
 
 - Remove inherited native sidebar notification dots from the Panel entry so they do not remain permanently visible.
 
-- Localize the Panel-frame-not-ready error into Chinese for both initial injection and reconnection.
+- Fix Panel immediately closing, flickering, or opening the native profile menu. Keep automatic name and avatar capture, restore icon alignment and inactive color, and preserve Back/Forward navigation.
 
-- Shorten the recovery prompt to “Codex 已经更新，请点击下方按钮重新启动”; retain the Restart Codex and connect action.
+- Preserve the current Codex conversation and draft across Panel service restarts and mount retries when the patch code is unchanged. Installing or updating the patch still reloads once.
 
-- Clarify missing-debugging-port prompts: identify the startup cause, explain that no Panel upgrade or reinstallation is needed, label the action Restart Codex and connect, and advise launching Codex from Panel next time.
+- Keep the main window connected while other windows retry mounting. Exclude unsupported detached chats, standalone Page documents, and hidden prewarmed windows, and show the actual connection or mounting failure.
 
-- Detect macOS Codex restarts without Panel connection parameters and show a Restore connection action. Reuse the visible native restart confirmation; deferring keeps the existing service running. No desktop version allowlist is added.
+- Support the new navigation rail and Free sidebars without Plugins. Place Panel below the complete New chat row without covering Quick chat or inheriting pet avatars and notification dots. Sidebar, sending, and reconnection compatibility includes contributions by [@InTheManXG](https://github.com/InTheManXG) in [#27](https://github.com/shay-wong/codex-panel/pull/27).
 
-- Preserve custom-provider adaptation on reinjection by discovering the current composer URL from existing import maps after blob loading.
+- Rediscover connection ports after Codex updates. If startup arguments are lost, offer Restart Codex and connect with confirmation; deferring keeps the service running.
 
-- Place Panel below the complete New chat row so it does not squeeze or cover New chat and Quick chat.
+- Restore custom-provider sending adaptation from existing module mappings and support the updated composer in desktop 26.928.20755 while retaining session-state, settings-loading, and other native send blockers.
 
-- Support sidebars without Plugins or pets, including Free accounts: mount Panel after New chat when no existing navigation row is available.
+- Support the updated macOS CLI layout and Windows Store companion executable caching. Add 6.1 Sol, 6 Sol, and 6 Luna project model choices.
 
-- Keep the Panel board icon when the native sidebar reference row uses a pet avatar.
-
-- Fix Panel opening with the updated Codex Data Router and mount it in the visible workspace when inactive conversations remain in the DOM.
-
-- Locate Panel entries in the 26.928.20755 sidebar destination container and support native links and role-button rows. Keep keyboard activation and reattach after sidebar replacement; do not misdiagnose every mount failure as a missing main window.
-
-- Exclude detached chat windows from Panel injection and reject unmounted entries instead of reporting injection success. Missing main windows now show an actionable message.
-
-- Rediscover Codex debugging ports after disconnection and show the actual connection failure with the Restart service action instead of an indefinite generic waiting message.
-
-- Adapt the optional custom-provider composer fix to desktop 26.928.20755 while retaining its new session-state and settings-loading blockers.
-
-- Recognize the packaged macOS CLI in ChatGPT desktop 26.928.20755 for executable discovery and launcher signature verification, retaining the OpenAI signing identity check. Add 6.1 Sol, 6 Sol, and 6 Luna project model choices from Codex CLI 0.159.2.
+- Preserve native titlebar dragging, unify stacked notifications and Undo, hide redundant Todo comment actions, and pause automatic claiming when all pending tasks await permission.
 
 - Fixed custom-provider sending after updating to ChatGPT desktop 26.917.71314. The adapter now discovers and matches the composer by code structure, tolerates asset hash and minified symbol changes, and retains 26.917.51856 compatibility.
 

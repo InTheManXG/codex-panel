@@ -1,5 +1,7 @@
 # Codex Panel
 
+Opening Panel automatically reads the available account name and avatar without opening the native profile menu.
+The Panel rail entry keeps its native icon alignment and inactive color, with its selected color unchanged. Native destination clicks no longer restore a cached Panel entry. Native state updates on the same page keep Panel open from either the sidebar or the App. The connection indicator remains ready while other Codex windows are still mounting; opening Panel is not required to refresh it. Standalone Page document windows, including hidden prewarmed windows, are excluded from injection; Pages inside the main window remain supported. Mount retries and Panel service restarts preserve the current Codex page and draft when the patch code is unchanged. Installing or updating the patch still reloads once.
 After Codex updates on macOS, Panel reconnects when a debugging port is available. If launch parameters were lost, the manager offers **重启 Codex 并连接** (Restart Codex and connect); restarting Codex requires confirmation. See [update recovery](docs/codex-compatibility.md#recovery-after-desktop-updates).
 
 The custom-provider send-limit switch retains its adapter when reconnecting to a window whose composer already loads through a module mapping.
@@ -256,7 +258,7 @@ npm run codex:inject -- --port 9229 --open
 
 This command also stays resident so the injected tab can restart Panel after a service exit. Stop it with `Ctrl-C`.
 
-The script adds a Panel entry to the Codex sidebar and renders the iframe across Codex's complete main workspace, including the contextual titlebar area so Panel's own header does not leave an empty strip. That full rectangular header is placed above Electron's draggable layer and marked `no-drag`; because the native contextual actions are suppressed while Panel is active, its own actions use their normal edge padding without an artificial right-side gap. The native sidebar stays mounted, while the previous page selection and contextual header are temporarily suppressed; choosing another Codex page restores them.
+The script adds an independent Panel entry before Explore in Codex’s navigation rail, with the existing sidebar entry retained for older layouts. Panel fills the workspace beside the rail and below the native titlebar, preserving window dragging and native navigation. The previous page’s contextual actions and selection are hidden while Panel is active and restored when you return. Compact account menus provide the user name and avatar for issue activity. Notifications share a stack: hover or keyboard focus expands it and pauses dismissal; swipe to dismiss or use the available Undo action.
 
 The Panel entry can be opened directly from a conversation as well as from native pages such as Plugins and Sites. It restores the last selected project, including **All projects**, unless the Panel URL contains an explicit `project` query parameter. Panel participates in Codex’s native navigation history: Back returns to the page before Panel, Forward reopens Panel, and navigating from Panel to a native destination adds that destination to the same history. Route changes control visibility without matching button or command labels; utility actions that do not navigate leave Panel open.
 

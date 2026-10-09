@@ -3,8 +3,12 @@ import { EventEmitter, once } from "node:events";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
+import { createHash } from "node:crypto";
+import path from "node:path";
+import { Readable, Writable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
-const source = await readFile(new URL("../scripts/codex-injector.mjs", import.meta.url), "utf8");
+const source = (await readFile(new URL("../scripts/codex-injector.mjs", import.meta.url), "utf8")).replaceAll("\r\n", "\n");
 const runtimeSource = await readFile(
   new URL("../scripts/codex-injector-runtime.mjs", import.meta.url),
   "utf8",
@@ -16,6 +20,44 @@ const supervisorSource = await readFile(
 const packageJson = JSON.parse(
   await readFile(new URL("../package.json", import.meta.url), "utf8"),
 );
+
+test("Windows Store cache includes companion executables and refreshes changed files", async () => {
+  const directory = String.raw`C:\Program Files\WindowsApps\Codex\bin`;
+  const files = new Map([
+    "codex.exe", "codex-code-mode-host.exe", "codex-command-runner.exe", "codex-windows-sandbox-setup.exe",
+  ].map((name) => [path.win32.join(directory, name), { content: name, mtimeMs: 10 }]));
+  const copies = [];
+  const cache = String.raw`C:\isolated-panel`;
+  const resolverSource = source.slice(source.indexOf("async function resolveRunnableCodexExecutable("), source.indexOf("function emitLauncherEvent("));
+  const resolve = vm.runInNewContext(`${resolverSource}; resolveRunnableCodexExecutable`, {
+    resolveCodexExecutable: () => path.win32.join(directory, "codex.exe"),
+    process: { platform: "win32" }, path: path.win32, panelDataDirectory: cache, pipeline,
+    mkdir: async () => {},
+    stat: async (filename) => {
+      const file = files.get(filename);
+      if (!file) throw Object.assign(new Error("missing"), { code: "ENOENT" });
+      return { size: file.content.length, mtimeMs: file.mtimeMs, mtime: file.mtimeMs, atime: 1 };
+    },
+    createReadStream: (filename) => Readable.from([files.get(filename).content]),
+    createWriteStream: (filename) => new Writable({ write(chunk, _encoding, done) {
+      copies.push(filename);
+      files.set(filename, { content: chunk.toString(), mtimeMs: 0 });
+      done();
+    } }),
+    utimes: async (filename, _atime, mtime) => { files.get(filename).mtimeMs = mtime; },
+  });
+  assert.equal(await resolve("fixture"), path.win32.join(cache, "codex-runtime", "codex.exe"));
+  assert.equal(copies.length, 4);
+  for (const [filename, file] of [...files].filter(([filename]) => filename.startsWith(directory))) {
+    assert.deepEqual(files.get(path.win32.join(cache, "codex-runtime", path.win32.basename(filename))), file);
+  }
+  await resolve("fixture");
+  assert.equal(copies.length, 4);
+  files.get(path.win32.join(directory, "codex-code-mode-host.exe")).mtimeMs = 20;
+  await resolve("fixture");
+  assert.equal(copies.length, 5);
+  assert.equal(path.win32.basename(copies.at(-1)), "codex-code-mode-host.exe");
+});
 
 test("App Server diagnostics distinguish unmatched responses from successful replies without logging content", async () => {
   const functionSource = source.slice(source.indexOf("async function requestCodexAppServerViaCdp("), source.indexOf("async function applyPanelAutomationPolicy("));
@@ -427,4 +469,49 @@ test("injector cleanup never terminates the launched ChatGPT process", () => {
   );
   assert.match(cleanupSource, /launchedCodex\?\.unref\?\.\(\)/);
   assert.doesNotMatch(cleanupSource, /launchedCodex\.kill/);
+});
+
+
+test("injection code identity survives host address and capability rotation", async () => {
+  const start = source.indexOf('async function currentInjectionSource()');
+  const end = source.indexOf('async function resolveRunnableCodexExecutable', start);
+  const context = vm.createContext({
+    createHash, URL, injectionPath: '/fixture/inject.js',
+    readFile: async (path) => String(path).endsWith('inject.js') ? '// injection' : '// quota',
+    panelOrigin: 'http://127.0.0.1:10001', panelPageUrl: 'http://127.0.0.1:10001/first/',
+    privatePanelMode: true, hostCapability: 'first', injectionSourceHashName: '__CODEX_PANEL_SOURCE_HASH__',
+  });
+  vm.runInContext(source.slice(start, end).replaceAll('import.meta.url', '"file:///fixture/injector.mjs"'), context);
+  const first = await vm.runInContext('currentInjectionSource()', context);
+  Object.assign(context, { panelOrigin: 'http://127.0.0.1:10002', panelPageUrl: 'http://127.0.0.1:10002/second/', hostCapability: 'second' });
+  const second = await vm.runInContext('currentInjectionSource()', context);
+  assert.equal(second.sourceHash, first.sourceHash, 'restarting a service is not a code update');
+  assert.notEqual(second.source, first.source, 'connection credentials must still rotate');
+  context.readFile = async () => '// upgraded code';
+  const upgraded = await vm.runInContext('currentInjectionSource()', context);
+  assert.notEqual(upgraded.sourceHash, first.sourceHash);
+});
+
+
+test("retired isolated host listeners do not duplicate notifications or accept old requests", () => {
+  const start = source.indexOf('expression: `(() => {\n          const capability =');
+  const end = source.indexOf('`,', start);
+  const template = source.slice(start + 'expression: '.length, end + 1);
+  const listeners = [];
+  const notifications = [], requests = [];
+  const window = { location: { origin: 'https://codex.invalid' }, addEventListener: (_, fn) => listeners.push(fn) };
+  const context = vm.createContext({ window, notify: (value) => notifications.push(value), request: (value) => requests.push(value) });
+  const install = (hostCapability) => {
+    const script = vm.runInNewContext(template, { hostCapability, codexNotificationBindingName: 'notify', hostRequestMessage: 'request', hostBindingName: 'request' });
+    vm.runInContext(script, context);
+  };
+  const send = (data) => listeners.forEach(fn => fn({ source: window, origin: window.location.origin, data }));
+  install('old-host');
+  install('new-host');
+  send({ type: 'mcp-notification', hostId: 'local', method: 'thread/updated' });
+  assert.equal(notifications.length, 1);
+  send({ type: 'request', capability: 'old-host', payload: { id: 'stale' } });
+  assert.equal(requests.length, 0);
+  send({ type: 'request', capability: 'new-host', payload: { id: 'current' } });
+  assert.equal(requests.length, 1);
 });

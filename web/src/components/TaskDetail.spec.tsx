@@ -50,6 +50,7 @@ it("shows manual conversation activity and opens its binding without preparing a
   const view = (running: boolean, current = task) => <TaskboardLanguageProvider language="zh"><TaskDetail {...props} task={current} processingRunning={running} /></TaskboardLanguageProvider>;
   let result: ReturnType<typeof render>;
   await act(async () => { result = render(view(true)); });
+  expect(screen.getByText("改变状态为-等待认领")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "新建子议题" }));
   expect(createChild).toHaveBeenCalledWith(task);
   const running = screen.getByRole("button", { name: "正在处理 · 查看对话" });
@@ -63,6 +64,7 @@ it("shows manual conversation activity and opens its binding without preparing a
   await act(async () => { result.rerender(view(false)); });
   expect(screen.getByRole("button", { name: "处理中 · 查看对话" }).getAttribute("aria-busy")).toBe("false");
   await act(async () => { result.rerender(view(false, { ...task, status: "todo" })); });
+  expect(screen.queryByText("改变状态为-等待认领")).toBeNull();
   await act(async () => { fireEvent.click(screen.getByRole("button", { name: "准备执行" })); });
   expect(prepare).toHaveBeenCalledOnce();
   await act(async () => { result.rerender(view(false, { ...task, status: "todo", threadBinding: null, threadId: null })); });

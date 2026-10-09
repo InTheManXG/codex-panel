@@ -71,12 +71,12 @@ test("comment metadata separators never become avatar content", () => {
 });
 
 test("Codex host identity is forwarded to user-authored panel mutations", () => {
-  assert.match(injectSource, /function readCodexUser\(\)/);
+  assert.match(injectSource, /function readCodexUser\(userId\)/);
   assert.match(
     injectSource,
-    /button\[aria-haspopup="menu"\][\s\S]*?profileButton\.querySelector\("img"\)[\s\S]*?avatar\?\.currentSrc \|\| avatar\?\.src \|\| null/,
+    /profileButton\.querySelector\("img"\)|normalizeCodexAvatar/,
   );
-  assert.match(injectSource, /user: readCodexUser\(\)/);
+  assert.match(injectSource, /user: currentCodexUser \?\? undefined/);
   assert.match(typesSource, /user\?: ActorIdentity/);
   assert.match(apiSource, /export function setCurrentUserActor/);
   assert.match(apiSource, /X-Panel-User-Id/);

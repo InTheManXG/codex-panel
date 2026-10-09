@@ -48,14 +48,25 @@ async function chromeExecutable() {
   return null;
 }
 
-function fixtureHtml(origin, freeSidebar) {
+function fixtureHtml(origin, freeSidebar, railLayout) {
   const encodedSource = Buffer.from(source).toString("base64");
   return `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8">
     <style>
-      html, body { width: 1200px; height: 800px; margin: 0; }
+      html, body { width: 1200px; height: 800px; margin: 0; --app-shell-titlebar-height: 36px; --radius-xl-base: 16px; --color-token-foreground: #fcfcfc; --button-text-color: rgba(252, 252, 252, 0.526); }
+      #native-titlebar { position: absolute; top: 0; z-index: 30; height: 36px; }
+      #native-titlebar button { height: 36px; }
+      #workspace { position: relative; width: 1200px; height: 700px; }
+      nav[data-app-navigation-rail] { position: absolute; width: 64px; }
+      .sidebar-navigation { margin-left: 64px; }
+      nav[data-app-navigation-rail] button::before { content: ""; opacity: 0; }
+      nav[data-app-navigation-rail] button[data-selected]::before { opacity: 1; }
+      nav[data-app-navigation-rail] button { position: relative; width: 48px; height: 40px; }
+      nav[data-app-navigation-rail] button svg { width: 20px; height: 20px; }
+      .rail-icon-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+      nav[data-app-navigation-rail] .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; }
       aside { position: absolute; width: 200px; height: 800px; }
       main { position: absolute; left: 200px; width: 1000px; height: 700px; }
       main > header { position: absolute; z-index: 2; width: 1000px; height: 48px; }
@@ -66,7 +77,16 @@ function fixtureHtml(origin, freeSidebar) {
     </style>
   </head>
   <body>
+    <header id="native-titlebar" data-testid="app-shell-header-context-menu-surface"><button>Back</button></header>
+    <div id="workspace" data-app-shell-workspace-row>
     <aside>
+    ${railLayout ? `<nav data-app-navigation-rail>
+      <button data-sidebar-destination="builtin:home" aria-current="page" data-selected><svg viewBox="0 0 20 20"><path d="M2 2h16v16H2Z"/></svg><span class="sr-only">首页</span></button>
+      <button data-sidebar-destination="sites"><span class="sr-only">站点</span></button>
+      <button id="explore" aria-haspopup="menu"><span class="rail-icon-center"><svg></svg></span><span class="sr-only">探索</span></button>
+      <button id="profile-trigger" aria-haspopup="menu" aria-label="Open profile menu" aria-expanded="false" aria-controls="profile-menu"></button>
+    </nav>` : ""}
+      <div class="sidebar-navigation">
       <nav role="navigation">
         ${freeSidebar ? '<div id="new-chat-row" class="sidebar-item" style="display:flex;height:36px;width:200px"><button class="sidebar-item" style="display:flex;height:100%;flex:1;min-width:0"><svg width="20" height="20"></svg><span class="text-fade-truncate">新聊天</span></button><button aria-label="快速聊天">+</button></div>' : ''}
         <div data-app-action-sidebar-scroll>
@@ -77,9 +97,11 @@ function fixtureHtml(origin, freeSidebar) {
           </div>`}
           <section data-app-action-sidebar-section>
             <div data-app-action-sidebar-section-heading="项目">项目</div>
+            <div id="focused-thread" data-app-action-sidebar-thread-id="thread-449" aria-current="page">Current conversation</div>
           </section>
         </div>
       </nav>
+      </div>
     </aside>
     <main>
       <header>Codex header</header>
@@ -95,15 +117,21 @@ function fixtureHtml(origin, freeSidebar) {
         ></webview>
       </div>
     </main>
+    </div>
     <output id="result"></output>
     <script>
-      const navigationEntries = [{ pathname: "/", search: "", hash: "", state: null }];
-      let navigationIndex = 0;
+      const navigationEntries = [{ key: "initial", pathname: "/", search: "", hash: "", state: null }];
+      let navigationIndex = 0, nextNavigationKey = 0, navigationAction = "POP";
       const nativeNavigator = {
         get location() { return navigationEntries[navigationIndex]; },
-        push(location, state) { navigationEntries.splice(++navigationIndex, navigationEntries.length, { ...location, state }); },
-        replace(location, state) { navigationEntries[navigationIndex] = { ...location, state }; },
-        go(delta) { navigationIndex = Math.max(0, Math.min(navigationEntries.length - 1, navigationIndex + delta)); },
+        get action() { return navigationAction; },
+        push(location, state) {
+          navigationAction = "PUSH";
+          navigationEntries.splice(++navigationIndex, navigationEntries.length, { ...location, state, key: String(++nextNavigationKey) });
+          if (state?.__codexPanel) queueMicrotask(() => nativeNavigator.replace(nativeNavigator.location, { ...state, sidebarProductMode: "codex" }));
+        },
+        replace(location, state) { navigationAction = "REPLACE"; navigationEntries[navigationIndex] = { ...location, state, key: String(++nextNavigationKey) }; },
+        go(delta) { navigationAction = "POP"; navigationIndex = Math.max(0, Math.min(navigationEntries.length - 1, navigationIndex + delta)); },
       };
       document.querySelector("aside").__reactFiber$fixture = { memoizedProps: { navigator: nativeNavigator }, return: null };
       window.__CODEX_PANEL_URL__ = ${JSON.stringify(`${origin}/panel?host=codex`)};
@@ -111,7 +139,33 @@ function fixtureHtml(origin, freeSidebar) {
       window.__CODEX_PANEL_PRIVATE_FRAME__ = true;
       window.__CODEX_PANEL_HOST_CAPABILITY__ = "fullheight-host-capability";
       window.__CODEX_PANEL_SOURCE_HASH__ = "fullheight-regression";
+      const profileTrigger = document.getElementById("profile-trigger");
+      if (profileTrigger) profileTrigger.__reactFiber$fixture = { memoizedProps: {
+        sidebarFooter: { profileIdentity: { displayName: "Fixture User", profileImageUrl: null } },
+      }, return: null };
+      window.__profileMenuOpens = 0;
+      profileTrigger?.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowDown") return;
+        window.__profileMenuOpens++;
+        const menu = document.createElement("div");
+        menu.id = "profile-menu";
+        menu.setAttribute("role", "menu");
+        menu.setAttribute("aria-labelledby", profileTrigger.id);
+        menu.innerHTML = '<div role="menuitem"><div data-menu-row-content><span class="flex-1 min-w-0">Fixture User</span></div></div>';
+        menu.addEventListener("keydown", (event) => {
+          if (event.key !== "Escape") return;
+          menu.remove();
+          profileTrigger.setAttribute("aria-expanded", "false");
+        });
+        document.body.appendChild(menu);
+        profileTrigger.setAttribute("aria-expanded", "true");
+      });
       window.__browserPanelClosed = false;
+      window.__redundantHomeNavigation = false;
+      document.querySelector('[data-sidebar-destination="builtin:home"]')?.addEventListener('click', () => {
+        window.__redundantHomeNavigation = true;
+        document.getElementById('focused-thread').removeAttribute('aria-current');
+      });
       window.__injectionError = null;
       window.__frameMessages = [];
       window.__externalOpenUrl = null;
@@ -199,6 +253,7 @@ function fixtureHtml(origin, freeSidebar) {
         const heartbeatTimer = setInterval(publishHeartbeat, 500);
         await new Promise((resolve) => setTimeout(resolve, 0));
         const entry = document.getElementById("codex-panel-entry");
+        const entryColorBefore = getComputedStyle(entry).color;
         const panel = document.querySelector("[data-browser-sidebar-webview]");
         const panelVisibleBefore = getComputedStyle(panel).visibility !== "hidden";
         const hostileNavigationLoaded = new Promise((resolve) => {
@@ -209,9 +264,10 @@ function fixtureHtml(origin, freeSidebar) {
 
         const page = document.getElementById("codex-panel-page");
         const frame = document.getElementById("codex-panel-frame");
-        const surface = document.getElementById("surface");
+        const surface = document.getElementById(${JSON.stringify(railLayout ? "workspace" : "surface")});
         const conversation = document.getElementById("conversation");
         const result = {
+          entryColorBefore,
           panelVisibleBefore,
           browserPanelClosed: window.__browserPanelClosed,
           conversationTop: conversation.getBoundingClientRect().top,
@@ -228,7 +284,52 @@ function fixtureHtml(origin, freeSidebar) {
           hostileNavigationRevoked: Boolean(frame?.hidden && !document.getElementById("codex-panel-status")?.hidden),
           forgedThreadOpened: window.__forgedThreadOpened,
           injectionError: window.__injectionError,
+          profileMenuOpens: window.__profileMenuOpens,
         };
+        const home = document.querySelector('[data-sidebar-destination="builtin:home"]');
+        const rail = document.querySelector('nav[data-app-navigation-rail]');
+        const sidebar = document.querySelector('.sidebar-navigation');
+        if (rail) {
+          const iconCenter = (button) => {
+            const rect = button.getBoundingClientRect();
+            const icon = button.querySelector('svg').getBoundingClientRect();
+            return [icon.left + icon.width / 2 - rect.left, icon.top + icon.height / 2 - rect.top];
+          };
+          result.railIconAligned = JSON.stringify(iconCenter(entry)) === JSON.stringify(iconCenter(document.getElementById('explore')));
+          result.destination = {
+            homeSelected: home.hasAttribute("data-selected"),
+            homeBackground: getComputedStyle(home, "::before").opacity,
+            entrySelected: entry.hasAttribute("data-selected"),
+            entryColor: getComputedStyle(entry).color,
+            sidebarVisibility: getComputedStyle(sidebar).visibility,
+            railVisibility: getComputedStyle(rail).visibility,
+            railPointerEvents: getComputedStyle(rail).pointerEvents,
+            pageLeft: page.getBoundingClientRect().left,
+            railRight: rail.getBoundingClientRect().right,
+            pageTop: page.getBoundingClientRect().top,
+            pageRadius: getComputedStyle(page).borderTopLeftRadius,
+            headerVisibility: getComputedStyle(document.querySelector('#native-titlebar button')).visibility,
+            threadCurrent: document.getElementById('focused-thread').getAttribute('aria-current'),
+            originalIcon: getComputedStyle(home.querySelector('svg > *')).visibility,
+            outlineIcon: getComputedStyle(home.querySelector('svg')).maskImage.startsWith('url("data:image/svg+xml,'),
+            nativeIconCount: home.querySelectorAll('svg').length,
+            taskboardOutline: getComputedStyle(entry.querySelector('[data-panel-icon="outline"]')).display,
+            taskboardFilled: getComputedStyle(entry.querySelector('[data-panel-icon="filled"]')).display,
+          };
+          home.click();
+          result.restored = {
+            pageHidden: page.hidden,
+            homeSelected: home.hasAttribute("data-selected"),
+            homeCurrent: home.getAttribute("aria-current"),
+            entrySelected: entry.hasAttribute("data-selected"),
+            entryColor: getComputedStyle(entry).color,
+            sidebarVisibility: getComputedStyle(sidebar).visibility,
+            contentVisibility: getComputedStyle(conversation).visibility,
+            threadCurrent: document.getElementById('focused-thread').getAttribute('aria-current'),
+            redundantHomeNavigation: window.__redundantHomeNavigation,
+            iconOverrides: document.querySelectorAll('[data-codex-panel-native-icon]').length,
+          };
+        }
         document.getElementById("result").textContent = btoa(JSON.stringify(result));
         clearInterval(heartbeatTimer);
         window.__codexPanelInjection__?.destroy();
@@ -238,8 +339,8 @@ function fixtureHtml(origin, freeSidebar) {
 </html>`;
 }
 
-for (const freeSidebar of [false, true]) {
-test(`Panel loads from ${freeSidebar ? "Free" : "Plugins"} sidebar, fills workspace and verifies frame boundaries`, async (t) => {
+for (const [layout, freeSidebar, railLayout] of [["Rail", false, true], ["Plugins", false, false], ["Free", true, false]]) {
+test(`Panel loads from ${layout} sidebar, fills workspace and verifies frame boundaries`, async (t) => {
   const chrome = await chromeExecutable();
   if (!chrome) {
     t.skip("Chrome or Chromium is not installed");
@@ -278,7 +379,7 @@ test(`Panel loads from ${freeSidebar ? "Free" : "Plugins"} sidebar, fills worksp
     }
     const origin = `http://127.0.0.1:${server.address().port}`;
     response.setHeader("content-type", "text/html; charset=utf-8");
-    response.end(fixtureHtml(origin, freeSidebar));
+    response.end(fixtureHtml(origin, freeSidebar, railLayout));
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   t.after(() => new Promise((resolve) => {
@@ -366,6 +467,7 @@ test(`Panel loads from ${freeSidebar ? "Free" : "Plugins"} sidebar, fills worksp
   assert.ok(encodedResult, "fixture did not report an injection result");
   const result = JSON.parse(Buffer.from(encodedResult, "base64").toString("utf8"));
   assert.deepEqual(result, {
+    entryColorBefore: "rgba(252, 252, 252, 0.525)",
     panelVisibleBefore: true,
     browserPanelClosed: true,
     conversationTop: 0,
@@ -388,6 +490,42 @@ test(`Panel loads from ${freeSidebar ? "Free" : "Plugins"} sidebar, fills worksp
     hostileNavigationRevoked: true,
     forgedThreadOpened: false,
     injectionError: null,
+    profileMenuOpens: 0,
+    ...(railLayout ? {
+      railIconAligned: true,
+      destination: {
+        homeSelected: true,
+        homeBackground: "0",
+        entrySelected: true,
+        entryColor: "rgb(252, 252, 252)",
+        sidebarVisibility: "hidden",
+        railVisibility: "visible",
+        railPointerEvents: "auto",
+        pageLeft: 64,
+        railRight: 64,
+        pageTop: 36,
+        pageRadius: "16px",
+        headerVisibility: "visible",
+        threadCurrent: "page",
+        originalIcon: "hidden",
+        outlineIcon: true,
+        nativeIconCount: 1,
+        taskboardOutline: "none",
+        taskboardFilled: "inline",
+      },
+      restored: {
+        pageHidden: true,
+        homeSelected: true,
+        homeCurrent: "page",
+        entrySelected: false,
+        entryColor: "rgba(252, 252, 252, 0.525)",
+        sidebarVisibility: "visible",
+        contentVisibility: "visible",
+        threadCurrent: "page",
+        redundantHomeNavigation: false,
+        iconOverrides: 0,
+      },
+    } : {}),
   });
 });
 

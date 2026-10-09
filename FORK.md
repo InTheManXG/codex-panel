@@ -1,8 +1,16 @@
-更新后连接恢复（等待上游吸收）：现场已确认 Codex 26.928.31416 普通启动时没有 remote-debugging 参数，Panel 持续轮询旧端口。macOS 启动器复用普通进程检测，在连接未就绪且参数缺失时只在状态变化后显示管理窗口；轮询错误不能覆盖恢复提示，端口可用后仍自动恢复。按用户指定的简短文案显示“Codex 已经更新，请点击下方按钮重新启动”，状态仅提示需要重启，不展示调试端口解释；检测逻辑保持不变。用户点“重启 Codex 并连接”后复用已可置前的原生确认框，选择“稍后”不停止现有 Panel 服务，不自动退出用户 Codex，不绑定版本号、不修改官方应用。源文件 `src-tauri/src/main.rs`、`src-tauri/src/update_dialog.rs`、`launcher/src/App.tsx`；验证 `renderer_readiness_downgrades_without_losing_a_pending_open`、`launcher/src/App.spec.tsx`、`test/codex-reconnect.test.mjs` 及隔离原生弹窗。说明同步中英文 README、CHANGELOG、`docs/codex-compatibility.md` 和 `docs/fork-capabilities.md`。来源 `git log -S'confirm_ordinary_codex_restart' -- src-tauri/src/main.rs`；合并保留确认先于停止服务，上游等价实现后移除此差异。下一次官方自动更新全过程仍需现场确认。按维护契约手工同步，当前环境未提供 fork-doc 技能。
-
 # Fork 维护说明
 
 退出响应与重试闪动（等待上游吸收；内部兼容性修复）：用户确认 2026-10-08 10:41 的约十秒退出停顿由强制退出结束，不能将系统 termination 日志当作清理成功。当前 Tao 的 AppKit 原生退出直接进入 `applicationWillTerminate`，绕过 Tauri `ExitRequested`；通过 `macos_exit.rs` 给原有代理补充缺失的 `applicationShouldTerminate:` 并刷新 AppKit 方法缓存，将 Dock/系统退出转交 Tauri，保留原代理其他行为；已有同名方法时拒绝覆盖。普通退出由 `ExitRequested` 暂缓，`ExitState` 在工作线程等待生命周期锁并仅清理一次，完成后重新请求退出；`Exit` 不再更新 UI 或重复停服务。进程停止前释放 child 状态锁，退出期间拒绝启动/重连及新安装，已在后台清理的更新重启仍按原流程放行。启动日志记录了适配模块执行、未就绪、再次执行；相同 source hash 且所需额度适配已经执行时仅重新绑定注入，不再整页 reload，初次安装及代码变化仍刷新。代码：`src-tauri/src/main.rs`、`src-tauri/src/macos_exit.rs`、`scripts/codex-injector.mjs`、`scripts/codex-injector-runtime.mjs`；验证：独立 AppKit 退出探针及 Rust 原生代理回调，Rust `exit_does_not_block_ui_on_lifecycle_lock_and_cleans_up_once` 与 `test/injector-host-runtime.test.mjs`，以及现有 injector、quota、reconnect 检查。来源定位：`git log -S'struct ExitState' -- src-tauri/src/main.rs`。合并保留更新安装保护、单次后台清理及适配安装判定；上游等价修复后移除。用户正在使用的应用未自动重启，实际退出及闪动效果待新版现场确认。
+
+连接状态与多窗口挂载隔离（本次修复，等待上游吸收）：`scripts/codex-injector.mjs` 的单窗口挂载失败只记录该窗口错误，继续尝试其他窗口；无任何成功窗口或保留连接时仍报告等待。`startPanelHostHeartbeats` 在独立的 2 秒定时器中维护已连接窗口的心跳，每连接不重叠，退出时停止；避免挂载等待超过 5 秒就绪阈值而误报断连。现场通过 target ID 定位持续失败的 `/space/local-page-…` 页面；当前原生 `main-B6ZOwXa3.js` 确认独立 Page 以 `window=page` 标识，并会以 `prewarm=1` 创建隐藏窗口。`isCodexTarget` 在连接和重载前排除此类窗口；未带独立窗口标记的主窗口 Page 不排除。 主窗口另有脚本正确但侧栏尚未渲染的现场记录（entryMounted=false、sourceMatches=true、sidebarCount=0）；`reconcileInjectionRuntime` 仅在补丁代码变化或额度模块首次准备成功时重载；sourceHash 只包含注入与额度适配源码，不包含服务地址、实例路径等连接配置。管理进程更换与挂载重试均保留当前文档、会话路由和草稿；hostCapability 变化时销毁旧 Panel 注入并在原文档重建，旧隔离桥监听器停止处理消息，由新心跳更新 startupToken；同版本实例保留自有 Panel 历史 key，避免返回失效或重开时重复入栈。首次升级到此修复因代码变化仍重载一次。失败日志记录目标标题与路由路径（不记录查询参数），避免再把未定位的页面误判成连接丢失。测试：`test/codex-window-target.test.mjs`、`test/injector-host-runtime.test.mjs`；用户说明：中英文 README、CHANGELOG 和 `docs/fork-capabilities.md`。来源定位：`git log -S'startPanelHostHeartbeats' -- scripts/codex-injector-runtime.mjs`；上游等价处理窗口失败与心跳后移除。
+
+本地整合 PR #27（2026-10-08）：合入 Fork 远端 `9bc03f1c406b9565a96030ed28603b6d28453d49`，精确上游基线仍为 `6a79ef522238ff11681cb85a9d803d19442a3d00`。保留上游 rail / 标题栏及自动账号姓名读取；没有 rail 时使用 #27 的 destination / Free 新聊天整行后入口，导航采用 #27 Data Router 和旧 MemoryRouter 双路径。此前未提交的本地修复已备份撤下，不作为本次实现。维护者保留自动读取姓名；后续针对头像菜单弹出的修复见下述“账号身份无菜单读取”，真实窗口恢复仍需安装后确认。验证：`npm run check` 的全部等价步骤、Rust launcher 单元测试与 Rail / Plugins / Free 隔离 Chrome 挂载。代码与测试沿用下述各条目；本次只整合本地代码，不安装、不发布。
+
+账号身份无菜单读取（本次修复，等待上游吸收）：`preparePanel → captureHostContext → readCodexUser` 自动获取姓名和头像时，直接读取头像组件已有的 `sidebarFooter.profileIdentity`，保留当前 React alternate 选择；旧布局仍读可见姓名或已展开菜单。禁止模拟 ArrowDown / Escape 展开或收起原生账号菜单，避免点击 Panel 时弹出设置菜单。当前安装的 `app-initial-61c077dcc1af.js` 已核对该数据结构；未加载身份时返回 null，不阻塞面板。代码：`inject/codex-panel.user.js`；回归：`test/inject-navigation-regression.test.mjs` 的真实 React 身份切换与菜单事件断言，以及 `test/inject-fullheight-regression.test.mjs` 的 Panel 显示 / 菜单零展开。用户入口：中英文 README 与 CHANGELOG、`docs/fork-capabilities.md#switch-between-panel-and-native-codex-destinations`。来源定位：`git log -S'footer.profileIdentity' -- inject/codex-panel.user.js`；上游提供无菜单副作用的自动身份读取后移除。
+
+导航与图标局部恢复（本次变更，等待上游吸收）：按维护者要求仅取回本地备份中有复现依据的历史键识别、重复导航抑制和单 SVG 样式覆盖；#27 的 Data Router、可见工作区及旧版 / Free 布局支持继续保留。rail 入口仍在 Explore 前，克隆按钮保留原生图标居中容器，未选中使用 `--button-text-color`、选中保持 `--color-token-foreground`。当前选中的原生目的地以新历史记录退出 Panel，不回退到其他页面；复制了 Panel state 的其他历史键不能打开面板；Codex 对同一 URL 执行 REPLACE 补充侧栏状态时，将当前 Panel 历史键归属迁移到替换后的键，避免刚打开就误关闭。2026-10-08 现场诊断确认该替换包含 sidebarProductMode / sidebarProductModeAccountKey；Data Router 与旧 MemoryRouter 的替换和原生 PUSH 通过针对性测试。账号姓名继续自动读取；读取方式采用下述“账号身份无菜单读取”，不触发菜单。代码：`inject/codex-panel.user.js`；验证：`test/inject-navigation-regression.test.mjs`、`test/codex-sidebar-mount.test.mjs`、`test/inject-fullheight-regression.test.mjs`、`test/inject.test.mjs`；用户入口：中英文 README、`docs/fork-capabilities.md#switch-between-panel-and-native-codex-destinations` 与中英文未发布日志。来源定位：`git log -S'panelLocationKeys' -- inject/codex-panel.user.js`。上游等价解决原生缓存导航与 React 图标重绘后移除此补充。备份中的 `rateLimitState/sendBlocked` 分支会整块取消发送阻止而非仅额度条件，因此未恢复；CLI、importmap 重新发现和端口重连已由 #27 覆盖。
+
+更新后连接恢复（等待上游吸收）：现场已确认 Codex 26.928.31416 普通启动时没有 remote-debugging 参数，Panel 持续轮询旧端口。macOS 启动器复用普通进程检测，在连接未就绪且参数缺失时只在状态变化后显示管理窗口；轮询错误不能覆盖恢复提示，端口可用后仍自动恢复。按用户指定的简短文案显示“Codex 已经更新，请点击下方按钮重新启动”，状态仅提示需要重启，不展示调试端口解释；检测逻辑保持不变。用户点“重启 Codex 并连接”后复用已可置前的原生确认框，选择“稍后”不停止现有 Panel 服务，不自动退出用户 Codex，不绑定版本号、不修改官方应用。源文件 `src-tauri/src/main.rs`、`src-tauri/src/update_dialog.rs`、`launcher/src/App.tsx`；验证 `renderer_readiness_downgrades_without_losing_a_pending_open`、`launcher/src/App.spec.tsx`、`test/codex-reconnect.test.mjs` 及隔离原生弹窗。说明同步中英文 README、CHANGELOG、`docs/codex-compatibility.md` 和 `docs/fork-capabilities.md`。来源 `git log -S'confirm_ordinary_codex_restart' -- src-tauri/src/main.rs`；合并保留确认先于停止服务，上游等价实现后移除此差异。下一次官方自动更新全过程仍需现场确认。按维护契约手工同步，当前环境未提供 fork-doc 技能。
 
 自定义 API 适配重新发现（等待上游吸收）：真实窗口已安装映射但 performance 仅剩 CSS，旧发现逻辑重注入时读取失败并移除适配。`scripts/codex-provider-quota.mjs` 从现有 importmap 的原 URL 识别当前 app-primary 模块；无效映射跳过，仍需源码结构验证，保留官方 provider 及其他发送阻止条件。验证 `test/codex-provider-quota.test.mjs` 的 blob-only 重注入复现、新旧开关与发送边界，以及 `test/injector.test.mjs`；对方 26.928.21956 原脚本匹配和改写语法已通过，本机真实 importmap 只读发现通过，对方最终发送待确认。来源 `git log -S'从已安装的映射找回当前模块' -- scripts/codex-provider-quota.mjs`；上游等价修复后移除。
 
@@ -71,9 +79,9 @@ Free 侧边栏兼容（等待上游吸收）：没有插件、宠物及 destinat
 - 权威上游：`chuspeeism/dashi-taskboard`
 - 上游默认分支：`main`
 - GitHub Fork 创建时间：`2026-08-03T14:40:11Z`
-- 本次合并的上游父提交：`1528a8eb31466829ca5a9fd436f4dfd285694a74`
-- 精确已合并上游基线：`1528a8eb31466829ca5a9fd436f4dfd285694a74`
-- 比较范围：`1528a8eb31466829ca5a9fd436f4dfd285694a74..HEAD`
+- 本次合并的上游父提交：`6a79ef522238ff11681cb85a9d803d19442a3d00`
+- 精确已合并上游基线：`6a79ef522238ff11681cb85a9d803d19442a3d00`
+- 比较范围：`6a79ef522238ff11681cb85a9d803d19442a3d00..HEAD`
 
 持续移动的 `upstream/main` 只有在祖先关系证明它与上述 SHA 相同时才是本文档基线；后续新提交仍属于待合并候选。合并提交本身的 Fork 侧父提交不是比较基线。
 
@@ -93,13 +101,17 @@ Free 侧边栏兼容（等待上游吸收）：没有插件、宠物及 destinat
 
 本轮合入 `1528a8e`：吸收父任务详情创建子任务、按顶层任务加权的项目完成度、名称/优先级排序、创建日期开关、正文与评论附件回显及本机文件操作、外部 Agent 会话归属与恢复命令、Jira Cloud 增强搜索分页及头像修复。上游新增字段移植到 Fork 现有本地/Cloud 校验与记录映射，不恢复已删除的共享重构文件；新 Cloud 迁移使用 `0013_agent_sessions.sql` 和 `0014_attachment_body_fallback.sql` 避免编号碰撞。Fork 保留 `panel:` 消息协议、独立版本与标签发布流程、工作流仅查询 Skills，以及基于 MemoryRouter 的导航历史，不恢复上游设置标题匹配关闭分支。
 
+本轮同步 `ef90f5b`：吸收 Windows 安装版 `panelctl` 入口，并保留自动化响应中的 `idleReason` 协议字段。上游“所有待办等待权限时暂停”实现依赖旧的 Taskboard 定时任务和临时判断会话；Fork 已由持久化 Claim Queue、依赖状态和阻塞恢复流程承担同一自动执行入口，因此不引入第二套旧定时任务路径或其 Taskboard 命名。产品名、`panelctl` 和当前 Codex Panel 自动化入口保持不变。
+
 子任务入口适配（本轮独立功能提交，长期保留）：详情页的直接创建子任务仅用于普通任务；Jira 需求继续通过已有规划与关联执行任务流程拆分。代码：`web/src/components/TaskDetail.tsx`；验证：`web/src/components/TaskDetail.spec.tsx` 同时覆盖普通任务创建入口与 Jira 原流程。用户文档：中英文 README 与 `docs/fork-capabilities.md#task-organization-and-external-sessions`。来源定位：`git log -S'currentTask.source === "local" ? () => onCreateChild' -- web/src/components/TaskDetail.tsx`。上游若支持 Fork 的 Jira 规划与跨仓库关联约束，再评估吸收此适配。
+
+本轮同步 `6a79ef5`（上游 `1.1.26`）：吸收新版 Codex 导航栏独立入口与原生标题栏拖动区域保留、紧凑账号菜单身份读取及受限 WebP 头像、叠放通知与撤销、待认领评论的重复状态操作隐藏，以及 Windows Store Codex 配套可执行文件缓存。保留 Fork 的 MemoryRouter 导航历史、私有桥、额度适配、产品名和独立版本；不引入绑定上游组织与产品的 SignPath Windows 测试签名流水线。
 
 ## Fork 发布版本策略
 
 - 权威上游版本来源：精确合并基线中的 `package.json`
 - 发布版本来源：规范 `vX.Y.Z-fork` 标签。Actions 在构建目录同步 `package.json`、`package-lock.json` 根包条目、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` 和 `src-tauri/Cargo.lock` 的 launcher 条目；main 中的字段仅作本地开发构建版本，不代表最新 Release。
-- 精确基线的上游版本：`1.1.24`（本次同步代码基线，不改变 Fork 发布版本）
+- 精确基线的上游版本：`1.1.26`（本次同步代码基线，不改变 Fork 发布版本）
 - 最近已核实发布：`v0.0.3-fork`。后续发布以 GitHub 标签与 Release 为准，无需逐版修改此台账。
 
 Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标签为 `vX.Y.Z-fork`；后续按 Fork 自身变更递增。上游版本只记录合并基线，不决定、重置或覆盖 Fork 版本。此决定替代旧的 `<upstream-version>-fork.<N>` 策略，后续应用 fork-doc 时以本仓库约定为准。
@@ -458,3 +470,9 @@ Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标�
 
 - 用户确认复现路径为“面板 → 空间 → 首页”。原生目的地恢复会携带缓存的 location.state，仅关闭覆盖层不足以清除 Panel 标记的效果。图标栏原生点击记录明确的离开意图；直到用户再次点击面板，不因恢复旧 `__codexPanel` 标记自动打开。不改写原生路由、不拦截原生点击；未发生原生图标栏离开操作的前进后退行为继续沿用现有历史。
 - 验证：`test/inject.test.mjs` 按完整三步路径复现旧源码失败，覆盖同步/异步导航与再次手动打开面板。真实 App 验证待新包安装。代码：`inject/codex-panel.user.js`；生命周期：Fork 导航兼容修复。
+
+### PR #28 上游整合
+
+- 合并上游 `6ecb51f` 后，导航统一采用上游 `panelLocationKeys` 和 REPLACE 归属迁移，取代本地 `nativeRailDismissedPanel` 布尔拦截；复制到新历史 key 的旧标记不会打开面板，同时保留 Back/Forward。完整“面板 → 空间 → 首页”用例迁入 `test/inject-navigation-regression.test.mjs`，覆盖同步和异步提交。上文旧关闭标记说明属于整合前实现，不再生效。
+- 重连统一采用上游 `reloadRequired` 与 `quotaBootstrapPrepared`，保留其独立心跳、隐藏 Page 窗口排除和多窗口失败隔离；额度 runtime 内部仍用 `prepared` 防止重复创建 importmap。保留上游无菜单身份读取和图标重绘修复。
+- 入口位置以用户指定为准：有导航滚动区时位于现有图标末尾、头像前；没有该结构时保留上游 Explore 前兼容入口。保留可见侧边栏遍历与原生深浅色/填充状态。macOS 退出仍使用本分支单次异步清理与 AppKit 代理修复。
