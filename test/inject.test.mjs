@@ -1803,6 +1803,7 @@ test("Panel participates in the native memory router and restores its original m
   const start = source.indexOf("  function connectNativeNavigation()");
   const end = source.indexOf("  function scheduleRefresh()", start);
   const api = vm.runInNewContext(`(() => {
+    let nativeRailDismissedPanel = false;
     let nativeNavigator = null, detachNativeNavigation = null, lastNativeLocation = null, active = false, destroyed = false, lastNativeThreadId = "";
     const PANEL_ROUTE_STATE = "__codexPanel";
     const normalizeThreadId = value => value;
@@ -1883,6 +1884,7 @@ test("Panel follows Data Router navigation without navigator.location and unsubs
   const start = source.indexOf("  function connectNativeNavigation()");
   const end = source.indexOf("  function scheduleRefresh()", start);
   const api = vm.runInNewContext(`(() => {
+    let nativeRailDismissedPanel = false;
     let nativeNavigator = null, detachNativeNavigation = null, lastNativeLocation = null;
     let active = false, destroyed = false, lastNativeThreadId = "";
     const PANEL_ROUTE_STATE = "__codexPanel";
@@ -1930,5 +1932,45 @@ test("Panel replaces a cloned pet avatar with its own board icon", async () => {
     assert.equal(button.textContent.trim(), "任务面板");
   } finally {
     dom.window.close();
+  }
+});
+
+test("Panel -> Spaces -> Home does not restore the dismissed Panel route state", async () => {
+  for (const asyncCommit of [false, true]) {
+    let location = {pathname:'/', search:'', hash:'', state:null};
+    const listeners = new Set();
+    const router = {
+      get state(){return {location};},
+      subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
+      async navigate(path, options){
+        if(asyncCommit) await Promise.resolve();
+        location = {...path,state:options?.state};
+        listeners.forEach(fn=>fn());
+      },
+    };
+    const surface = {__reactFiber$test:{memoizedProps:{router},return:null}};
+    const start = source.indexOf('  function connectNativeNavigation()');
+    const end = source.indexOf('  function scheduleRefresh()',start);
+    const api = vm.runInNewContext(`let nativeNavigator=null, detachNativeNavigation=null, lastNativeLocation=null;
+      let active=false, destroyed=false, lastNativeThreadId='', nativeRailDismissedPanel=false;
+      const PANEL_ROUTE_STATE='__codexPanel', ENTRY_ID='codex-panel-entry';
+      const normalizeThreadId=x=>x, publishPendingThreadAssociation=()=>{};
+      const showPanel=()=>{active=true;}, closePanel=()=>{active=false;};
+      ${source.slice(start,end)}
+      ({openPanel,onNativeRailClick,syncNativeNavigation,visible:()=>active})`, {document:{querySelector:()=>surface}});
+    const railClick = () => api.onNativeRailClick({target:{closest:()=>({closest:()=>null})}});
+    api.openPanel();await Promise.resolve();
+    assert.equal(api.visible(),true);
+    const savedHome = {...location};
+    railClick();
+    await router.navigate({pathname:'/spaces/test',search:'',hash:''});
+    assert.equal(api.visible(),false);
+    railClick();
+    // 原生目的地恢复之前的首页位置时可能原样携带 Panel 写入的 state。
+    await router.navigate(savedHome,{state:savedHome.state});
+    api.syncNativeNavigation();
+    assert.equal(api.visible(),false,'returning Home must not restore Panel');
+    api.openPanel();await Promise.resolve();
+    assert.equal(api.visible(),true,'explicit Panel click must still work');
   }
 });

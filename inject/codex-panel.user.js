@@ -81,6 +81,7 @@
   let nativeNavigator = null;
   let detachNativeNavigation = null;
   let lastNativeLocation = null;
+  let nativeRailDismissedPanel = false;
   let lastNativeProjectId = "";
   let currentCodexUserId = "";
   let codexProjectMetadata = new Map();
@@ -2510,7 +2511,7 @@
     lastNativeLocation = location;
     const match = location.pathname.match(/^\/local\/([^/]+)$/);
     if (match) lastNativeThreadId = normalizeThreadId(decodeURIComponent(match[1]));
-    if (location.state?.[PANEL_ROUTE_STATE] === true) {
+    if (location.state?.[PANEL_ROUTE_STATE] === true && !nativeRailDismissedPanel) {
       if (!active) showPanel();
     } else if (active) {
       closePanel(false);
@@ -2519,15 +2520,19 @@
   }
 
   function onNativeRailClick(event) {
-    if (!active || destroyed) return;
+    if (destroyed) return;
     const destination = event.target?.closest?.("[data-app-navigation-rail] [data-sidebar-destination]");
     if (!destination || destination.closest(`#${ENTRY_ID}`)) return;
+    // 原生目的地会缓存 location.state；离开面板后，恢复旧首页标记不能再次打开面板。
+    // 即使当前已在空间中，也要保留这次明确的原生导航选择，直到用户再次点击面板。
+    nativeRailDismissedPanel = true;
     // 首页可能已经是底层路由，原生点击不会产生导航事件；先关闭覆盖层，再交还原生点击。
     closePanel(false);
   }
 
   function openPanel() {
     if (destroyed || active) return;
+    nativeRailDismissedPanel = false;
     if (!connectNativeNavigation()) {
       throw new Error("无法连接 Codex 原生导航，请等待页面加载后重试");
     }

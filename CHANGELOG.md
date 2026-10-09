@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Prevent Panel → Spaces → Home from reopening Panel through cached native route state; explicit native navigation dismisses Panel until its icon is clicked again.
+
 - Close the Panel overlay when a native rail destination is clicked, including Home without a route change; use muted inactive and darker active Panel icon colors, and suppress the native rail highlight while Panel is open.
 
 - Move the Panel entry to the left navigation rail as an icon with a tooltip; keep it available when the content sidebar is collapsed.
