@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Fix custom-provider Ultrafast selections losing their tier before API submission. Restart Codex after changing the switch and keep Panel running to load the adapted core model catalog.
+
 - Keep the macOS interface responsive while quitting by cleaning up managed processes once in the background.
 - Keep the Panel entry attached to an available sidebar when hidden or inactive sidebars coexist, preserving its existing position.
 - Reuse prepared custom-provider module mappings during injection retries before the composer loads.

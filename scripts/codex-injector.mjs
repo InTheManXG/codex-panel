@@ -34,6 +34,7 @@ import {
 } from "./codex-injector-runtime.mjs";
 import { readCodexQuotaStatus } from "./codex-rate-limits.mjs";
 import { prepareCodexProviderUltrafast } from "./codex-provider-ultrafast.mjs";
+import { createUltrafastCatalogAdapter } from "./codex-provider-ultrafast-catalog.mjs";
 import { prepareCodexProviderQuotaFix, watchCodexProviderQuotaPreferences } from "./codex-provider-quota.mjs";
 import { createPanelSupervisor } from "./panel-supervisor.mjs";
 import {
@@ -2824,6 +2825,11 @@ async function main() {
     ? validatedCodexExecutablePath(options.appExecutable)
     : codexExecutablePath(options.appPath);
   process.env.CODEX_EXECUTABLE = await resolveRunnableCodexExecutable(options.appPath);
+  const ultrafastCatalog = createUltrafastCatalogAdapter({
+    executable: process.env.CODEX_EXECUTABLE,
+    dataDirectory: panelDataDirectory,
+    preferencesFile: panelEnvironment("PREFERENCES_FILE"),
+  });
 
   let codexProcess = null;
   let cdpRuntime = null;
@@ -2945,6 +2951,7 @@ async function main() {
     if (cleanupPromise) return cleanupPromise;
     cleanupPromise = (async () => {
       preferencesWatcher?.close();
+      await ultrafastCatalog.close();
       stopHostHeartbeats?.();
       injectedTargets.forEach((connection) => {
         unregisterRoutableCodexConnection(connection);
@@ -2970,6 +2977,9 @@ async function main() {
     return cleanupPromise;
   };
   try {
+    if (options.watch) await ultrafastCatalog.sync().catch(error => {
+      console.error(`Panel Ultrafast catalog unavailable: ${error.message}`);
+    });
     let cdpReachable = false;
     if (!options.cdpPipe) {
       cdpReachable = await isReachable(cdpVersionUrl);
@@ -3216,6 +3226,9 @@ async function main() {
     }
 
     preferencesWatcher = watchCodexProviderQuotaPreferences(panelEnvironment("PREFERENCES_FILE"), () => {
+      void ultrafastCatalog.sync().catch(error => {
+        console.error(`Panel Ultrafast catalog update failed: ${error.message}`);
+      });
       for (const connection of injectedTargets.values()) {
         void connection.hostBridge?.publishHeartbeat().catch(error => {
           console.error(`Panel preference update failed: ${error.message}`);

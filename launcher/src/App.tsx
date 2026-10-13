@@ -279,7 +279,7 @@ export function App() {
                 <Separator size="4" />
                 <Setting id="customProviderQuotaFix" title="移除账号额度不足时 API 发送限制" detail="仅限自定义 API；首次安装适配时重载一次，之后开关即时生效" checked={preferences?.customProviderQuotaFix ?? false} disabled={!state || savingPreference} onChange={enabled => void savePreference("customProviderQuotaFix", enabled)} />
                 <Separator size="4" />
-                <Setting id="customProviderUltrafast" title="显示自定义 API 的 Ultrafast 选项" detail="仅限本地自定义 API 的 GPT-6 Astra、GPT-6.1 Sol；默认关闭，切换即时生效" checked={preferences?.customProviderUltrafast ?? false} disabled={!state || savingPreference} onChange={enabled => void savePreference("customProviderUltrafast", enabled)} />
+                <Setting id="customProviderUltrafast" title="显示自定义 API 的 Ultrafast 选项" detail="仅限本地自定义 API 的 GPT-6 Astra、GPT-6.1 Sol；默认关闭，更改后请重启 Codex，使用时保持 Panel 运行" checked={preferences?.customProviderUltrafast ?? false} disabled={!state || savingPreference} onChange={enabled => void savePreference("customProviderUltrafast", enabled)} />
                 <Separator size="4" />
                 <Setting id="followSystemAppearance" title="跟随系统外观" detail="自动适配 macOS 的浅色或深色模式" checked={followSystemAppearance} onChange={enabled => { setFollowSystemAppearance(enabled); window.localStorage.setItem("codex-panel.follow-system-appearance", String(enabled)); window.dispatchEvent(new CustomEvent("codex-panel-appearance-preference", { detail: enabled })); }} />
                 <Separator size="4" />
