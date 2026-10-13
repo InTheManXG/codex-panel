@@ -168,6 +168,8 @@ struct LauncherPreferences {
     hide_usage_banner: bool,
     #[serde(default)]
     custom_provider_quota_fix: bool,
+    #[serde(default)]
+    custom_provider_ultrafast: bool,
 }
 
 #[derive(Serialize)]
@@ -187,6 +189,7 @@ impl Default for LauncherPreferences {
             auto_open_panel: true,
             hide_usage_banner: false,
             custom_provider_quota_fix: false,
+            custom_provider_ultrafast: false,
         }
     }
 }
@@ -2581,7 +2584,7 @@ fn set_launcher_preference(
     key: String,
     enabled: bool,
 ) -> Result<LauncherPreferences, String> {
-    if !matches!(key.as_str(), "autoConnectCodex" | "autoOpenPanel" | "hideUsageBanner" | "customProviderQuotaFix") {
+    if !matches!(key.as_str(), "autoConnectCodex" | "autoOpenPanel" | "hideUsageBanner" | "customProviderQuotaFix" | "customProviderUltrafast") {
         return Err("未知的偏好设置".to_string());
     }
     update_preferences(&state, |preferences| match key.as_str() {
@@ -2589,6 +2592,7 @@ fn set_launcher_preference(
         "autoOpenPanel" => preferences.auto_open_panel = enabled,
         "hideUsageBanner" => preferences.hide_usage_banner = enabled,
         "customProviderQuotaFix" => preferences.custom_provider_quota_fix = enabled,
+        "customProviderUltrafast" => preferences.custom_provider_ultrafast = enabled,
         _ => unreachable!(),
     })
 }

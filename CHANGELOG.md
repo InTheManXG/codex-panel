@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Added an off-by-default preference to show Ultrafast in the native speed menu for GPT-6 Astra and GPT-6.1 Sol on local custom API providers, independently of ChatGPT account eligibility.
+
 - Fix false missing-Skill errors after successful native task prefill or submission, and preserve conversation linking when the draft is sent immediately.
 
 - Fix Panel immediately closing, flickering, or opening the native profile menu. Keep automatic name and avatar capture, restore icon alignment and inactive color, and preserve Back/Forward navigation.

@@ -2382,6 +2382,7 @@
       hostHeartbeatAt = Number(message.at) || 0;
       hideUsageBanner = message.hideUsageBanner === true;
       window.__codexPanelProviderQuotaV1__?.setEnabled(message.customProviderQuotaFix === true);
+      window.__codexPanelProviderUltrafastV1__?.setEnabled(message.customProviderUltrafast === true);
       syncUsageBannerVisibility();
       window[HOST_STARTUP_TOKEN_NAME] = message.startupToken ?? null;
       return;

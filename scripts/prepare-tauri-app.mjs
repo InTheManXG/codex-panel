@@ -313,6 +313,7 @@ async function copyApplicationResources() {
     "codex-injector-runtime.mjs",
     "codex-rate-limits.mjs",
     "codex-provider-quota.mjs",
+    "codex-provider-ultrafast.mjs",
     "panel-supervisor.mjs",
     "windows-codex.mjs",
   ]) {

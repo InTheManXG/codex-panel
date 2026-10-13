@@ -84,7 +84,7 @@ export function rewriteCodexProviderQuota(source, sourceUrl) {
     .replaceAll("import.meta.url", JSON.stringify(sourceUrl));
 }
 
-export async function prepareCodexProviderQuotaFix(cdp, preferencesFile, report = console.error) {
+export async function prepareCodexProviderQuotaFix(cdp, preferencesFile, report = console.error, modules = []) {
   if (!preferencesFile) return "";
   try {
     let preferences = {};
@@ -120,24 +120,29 @@ export async function prepareCodexProviderQuotaFix(cdp, preferencesFile, report 
       throw new Error("native composer source could not be read");
     }
     const { url, source } = result.result.value;
-    const patched = rewriteCodexProviderQuota(source, url);
+    const patched = rewriteCodexProviderQuota(modules.find(module => module.url === url)?.source ?? source, url);
     if (patched === null) throw new Error("unsupported composer source");
     cdp.on("Runtime.consoleAPICalled", ({ args }) => {
       if (args?.[0]?.value === appliedMessage) report(appliedMessage);
     });
     report(`Panel custom-provider quota module prepared for the next renderer load: ${url}`);
+    const replacements = [...modules.filter(module => module.url !== url), {url, source: patched}];
     return `(() => {
       if (window !== window.top) return;
+      window.__codexPanelUltrafastBootstrapPrepared__ = ${modules.length === 2};
       const runtime = globalThis.__codexPanelProviderQuotaV1__ ??= (${createCodexProviderQuotaRuntime.toString()})(${preferences.customProviderQuotaFix === true});
       runtime.setEnabled(${preferences.customProviderQuotaFix === true});
+      const ultrafast = globalThis.__codexPanelProviderUltrafastV1__ ??= (${createCodexProviderQuotaRuntime.toString()})(${preferences.customProviderUltrafast === true});
+      ultrafast.setEnabled(${preferences.customProviderUltrafast === true});
       if (runtime.installed) return;
       const install = () => {
         if (!document.documentElement) return;
         observer.disconnect();
-        const replacement = URL.createObjectURL(new Blob([${JSON.stringify(`${patched}\nglobalThis.__codexPanelProviderQuotaV1__.installed=true;console.info(${JSON.stringify(appliedMessage)});`)}], { type: "text/javascript" }));
+        const imports = Object.fromEntries(${JSON.stringify(replacements)}.map(({url, source}) => [url,
+          URL.createObjectURL(new Blob([source + ${JSON.stringify(`\nglobalThis.__codexPanelProviderQuotaV1__.installed=true;console.info(${JSON.stringify(appliedMessage)});`)}], { type: "text/javascript" }))]));
         const map = document.createElement("script");
         map.type = "importmap";
-        map.textContent = JSON.stringify({ imports: { [${JSON.stringify(url)}]: replacement } });
+        map.textContent = JSON.stringify({ imports });
         document.documentElement.prepend(map);
       };
       const observer = new MutationObserver(install);
