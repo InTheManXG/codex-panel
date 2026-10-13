@@ -37,6 +37,7 @@ test("unmounted entries never report successful injection", async () => {
     const inject = vm.runInNewContext(`${source.slice(start,end)}; injectTarget`, {
       installPanelHostBinding:()=>({install:async()=>{},publishHeartbeat:async()=>{}}),
       waitForRendererReady:async()=>{},prepareCodexProviderQuotaFix:async()=>"",panelEnvironment:()=>null,
+      prepareCodexProviderUltrafast:async()=>[],
       readInjectionStatus:async()=>({}),reconcileInjectionRuntime:async()=>({scriptIdentifier:"1",shouldRemainOpen:false}),
       waitForInjectionStatus:async()=>({entryMounted:false,sourceHash:"current",frameUrl:null}),
       registerInjectionSource:async()=>"1",reloadRenderer:async()=>{},evaluateInjectionSource:async()=>{},
@@ -84,6 +85,7 @@ test("quota preparation recovering on a mount retry reloads once before reusing 
     installPanelHostBinding: () => ({ install: async () => {}, publishHeartbeat: async () => {} }),
     waitForRendererReady: async () => {}, panelEnvironment: () => "fixture",
     prepareCodexProviderQuotaFix: async () => preparations.shift(),
+    prepareCodexProviderUltrafast: async () => [],
     readInjectionStatus: async () => status(), reconcileInjectionRuntime,
     registerInjectionSource: async () => "registered",
     reloadRenderer: async () => { reloads++; page.window = {}; },
