@@ -320,19 +320,34 @@ struct ReleaseCheckCache {
 
 #[derive(Default)]
 struct ExitState {
+    // 只串行化退出与更新的认领，不在此锁内清理进程或操作 UI。
+    transition: Mutex<()>,
     requested: AtomicBool,
     complete: AtomicBool,
 }
 
 impl ExitState {
+    fn begin_update(&self, installing: &AtomicBool) -> bool {
+        let _transition = self.transition.lock().unwrap();
+        if self.requested.load(Ordering::SeqCst) {
+            return false;
+        }
+        installing.store(true, Ordering::SeqCst);
+        true
+    }
+
     fn begin(
         self: &Arc<Self>,
+        installing: &AtomicBool,
         cleanup: impl FnOnce() + Send + 'static,
         finish: impl FnOnce() + Send + 'static,
     ) {
         // 菜单退出、Cmd+Q 和重复点击共用一次清理；主线程不能等待生命周期锁或子进程。
-        if self.requested.swap(true, Ordering::SeqCst) {
-            return;
+        {
+            let _transition = self.transition.lock().unwrap();
+            if installing.load(Ordering::SeqCst) || self.requested.swap(true, Ordering::SeqCst) {
+                return;
+            }
         }
         let state = Arc::clone(self);
         thread::spawn(move || {
@@ -2810,12 +2825,11 @@ fn install_prepared_update(app: &AppHandle, state: &Arc<LauncherState>) -> Resul
         return Ok(());
     };
     let lifecycle = state.lifecycle.lock().unwrap();
-    if state.exit.requested.load(Ordering::SeqCst) {
+    if !state.exit.begin_update(&state.update_installing) {
         dialog.close();
         *state.prepared_update.lock().unwrap() = Some((update, bytes));
         return Err("Codex Panel 正在退出。".into());
     }
-    state.update_installing.store(true, Ordering::SeqCst);
     let was_running = state.child.lock().unwrap().is_some();
     update_snapshot(app, state, |snapshot| {
         snapshot.update_ready = false;
@@ -3415,7 +3429,9 @@ fn main() {
                     let exit = Arc::clone(&state.exit);
                     let cleanup_app = app_handle.clone();
                     let exit_app = app_handle.clone();
-                    exit.begin(move || {
+                    let cleanup_state = Arc::clone(&state);
+                    exit.begin(&state.update_installing, move || {
+                        let state = cleanup_state;
                         append_log(&state, "Exit cleanup started");
                         let started = Instant::now();
                         stop_managed_child(&cleanup_app, &state);
@@ -3452,6 +3468,44 @@ mod tests {
     use uuid::Uuid;
 
     #[test]
+    fn update_and_exit_claims_are_mutually_exclusive() {
+        use std::sync::{Arc, Barrier};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        for _ in 0..64 {
+            let exit = Arc::new(super::ExitState::default());
+            let installing = Arc::new(AtomicBool::new(false));
+            let start = Arc::new(Barrier::new(2));
+            let update_exit = Arc::clone(&exit);
+            let update_installing = Arc::clone(&installing);
+            let update_start = Arc::clone(&start);
+            let update = std::thread::spawn(move || {
+                update_start.wait();
+                update_exit.begin_update(&update_installing)
+            });
+            start.wait();
+            exit.begin(&installing, || {}, || {});
+            let update_started = update.join().unwrap();
+            assert_ne!(update_started, exit.requested.load(Ordering::SeqCst),
+                "安装更新和退出只能有一方开始");
+        }
+    }
+
+    #[test]
+    fn quit_during_update_does_not_poison_exit_after_failed_install() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let exit = std::sync::Arc::new(super::ExitState::default());
+        let installing = AtomicBool::new(false);
+        assert!(exit.begin_update(&installing));
+        exit.begin(&installing, || panic!("安装时不能清理"), || panic!("安装时不能退出"));
+        assert!(!exit.requested.load(Ordering::SeqCst));
+        installing.store(false, Ordering::SeqCst);
+        let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+        exit.begin(&installing, || {}, move || { finished_tx.send(()).unwrap(); });
+        finished_rx.recv_timeout(std::time::Duration::from_secs(1)).unwrap();
+        assert!(!exit.begin_update(&installing), "退出后不能再开始安装");
+    }
+
+    #[test]
     fn exit_does_not_block_ui_on_lifecycle_lock_and_cleans_up_once() {
         use std::sync::{mpsc, Arc, Mutex};
         use std::sync::atomic::Ordering;
@@ -3465,13 +3519,13 @@ mod tests {
         let ui_exit = Arc::clone(&exit);
         let worker_lock = Arc::clone(&lifecycle);
         let ui = std::thread::spawn(move || {
-            ui_exit.begin(move || { drop(worker_lock.lock().unwrap()); }, move || {
+            ui_exit.begin(&super::AtomicBool::new(false), move || { drop(worker_lock.lock().unwrap()); }, move || {
                 finished_tx.send(()).unwrap();
             });
             returned_tx.send(()).unwrap();
         });
         returned_rx.recv_timeout(Duration::from_secs(1)).expect("退出不能阻塞 UI");
-        exit.begin(|| panic!("不能重复清理"), || panic!("不能重复退出"));
+        exit.begin(&super::AtomicBool::new(false), || panic!("不能重复清理"), || panic!("不能重复退出"));
         assert!(!exit.complete.load(Ordering::SeqCst));
         drop(held);
         finished_rx.recv_timeout(Duration::from_secs(1)).unwrap();
