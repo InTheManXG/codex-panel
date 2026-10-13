@@ -63,6 +63,7 @@ it("keeps launcher feedback, live status and global preferences working through 
   expect(document.getElementById("panelComponent")?.contains(button("serviceToggle"))).toBe(true);
   expect(document.getElementById("panelComponent")?.contains(button("restartService"))).toBe(true);
   expect(document.getElementById("codexComponent")?.contains(button("openCodex"))).toBe(true);
+  expect(document.getElementById("codexComponent")?.contains(button("restartCodex"))).toBe(true);
   expect(document.querySelector(".page-heading")?.contains(button("browserPanel"))).toBe(true);
   expect(document.querySelector(".sidebar-footer")).toBeNull();
   expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
@@ -90,6 +91,9 @@ it("keeps launcher feedback, live status and global preferences working through 
   await click(button("openCodex"));
   await advance(300);
   expect(invoke).toHaveBeenCalledWith("open_codex");
+  await click(button("restartCodex"));
+  await advance(300);
+  expect(invoke).toHaveBeenCalledWith("restart_codex");
 
   await click(button("restartService"));
   expect(button("restartService").getAttribute("aria-busy")).toBe("true");

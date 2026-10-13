@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Add a separate Restart Codex action to the Codex connection card to reload core configuration after confirmation.
+
 - Fix custom-provider Ultrafast selections losing their tier before API submission. Restart Codex after changing the switch and keep Panel running to load the adapted core model catalog.
 
 - Keep the macOS interface responsive while quitting by cleaning up managed processes once in the background.

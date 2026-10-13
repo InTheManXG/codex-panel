@@ -243,7 +243,10 @@ export function App() {
                 {cardAction("serviceToggle", hasProcess ? "stop_service" : "start_service", hasProcess ? "停止服务" : "启动服务", <LinearIcon name={hasProcess ? "pause" : "play"} />)}
                 {cardAction("restartService", "reconnect_codex", "重启服务", <span className="action-icon" aria-hidden="true">↻</span>, !hasProcess)}
               </Flex>}
-              {component.id === "codex" && <Flex className="card-actions">{cardAction("openCodex", "open_codex", "打开 Codex", <LinearIcon name="openExternal" />)}</Flex>}
+              {component.id === "codex" && <Flex className="card-actions" gap="2">
+                {cardAction("openCodex", "open_codex", "打开 Codex", <LinearIcon name="openExternal" />)}
+                {cardAction("restartCodex", "restart_codex", "重启 Codex", <span className="action-icon" aria-hidden="true">↻</span>)}
+              </Flex>}
               {component.id === "embedded" && <Flex className="card-actions">{needsRestart ? <Button ref={panelButton} id="panelAction" {...actionProps("reconnect_codex")}>重启 Codex 并连接</Button> : cardAction("panelAction", "open_embedded_panel", panelLabel, <LinearIcon name="panel" />, opening || queued, false, panelButton)}</Flex>}
             </div>)}</div>
             <Box mt="4">

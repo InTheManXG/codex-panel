@@ -74,6 +74,8 @@ Each project dashboard asks Codex for a daily progress summary. A failed generat
 
 ## Tauri/Rust desktop manager
 
+The **Codex connection** card includes **Restart Codex** beside **Open Codex**. After confirmation, Panel stops its automatic reconnect worker, normally quits the running Codex app (including an already connected app), then starts the service and Codex again. This reloads core configuration such as the Ultrafast catalog and interrupts active tasks. Canceling the confirmation leaves both processes running. **Restart service** retains its existing reconnect behavior.
+
 On macOS, native and menu quit requests share a single background cleanup. The interface keeps processing events while managed processes stop; exit follows cleanup. Update installation retains its existing quit protection and restart path.
 
 The launcher and its embedded workflow editor use React with Radix Themes for consistent controls in light and dark mode. Runtime actions still use the existing Tauri command/event interface. For source builds, `npm run build:launcher` generates `dist/launcher`; `npm run app:prepare` builds both the Panel Web UI and launcher before packaging the runtime.

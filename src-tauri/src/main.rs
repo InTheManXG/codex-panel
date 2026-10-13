@@ -1305,7 +1305,7 @@ fn find_codex_app(home_directory: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
-fn ordinary_codex_process(app_path: &Path) -> Result<Option<u32>, String> {
+fn codex_process(app_path: &Path, _codex_profile: &Path, include_managed: bool) -> Result<Option<u32>, String> {
     let app_name = app_path
         .file_stem()
         .ok_or_else(|| "无法识别 Codex App 名称".to_string())?;
@@ -1329,7 +1329,7 @@ fn ordinary_codex_process(app_path: &Path) -> Result<Option<u32>, String> {
         if command != executable && !command.starts_with(&format!("{executable} ")) {
             continue;
         }
-        if command.contains(" --remote-debugging-port=") {
+        if !include_managed && command.contains(" --remote-debugging-port=") {
             return Ok(None);
         }
         ordinary_pid = line[..separator].parse().ok();
@@ -1382,16 +1382,17 @@ fn find_codex_app(_home_directory: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
-fn ordinary_codex_process(app_path: &Path, codex_profile: &Path) -> Result<Option<u32>, String> {
+fn codex_process(app_path: &Path, codex_profile: &Path, include_managed: bool) -> Result<Option<u32>, String> {
     let output = StdCommand::new("powershell.exe")
         .args([
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "$ErrorActionPreference = 'Stop'; $app = $env:CODEX_PANEL_CODEX_APP_PATH; $profile = $env:CODEX_PANEL_CODEX_PROFILE; $name = [IO.Path]::GetFileName($app); $all = @(Get-CimInstance Win32_Process -Filter \"Name = '$name'\" | Where-Object { $_.ExecutablePath -eq $app }); $pids = @{}; foreach ($item in $all) { $pids[[uint32]$item.ProcessId] = $true }; $process = $all | Where-Object { $command = [string]$_.CommandLine; $isRoot = -not $pids.ContainsKey([uint32]$_.ParentProcessId); $usesManagedProfile = $command.IndexOf('--user-data-dir', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $command.IndexOf($profile, [StringComparison]::OrdinalIgnoreCase) -ge 0; $usesPrivateCdp = $command.IndexOf('--remote-debugging-pipe', [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $command.IndexOf('--remote-debugging-port', [StringComparison]::OrdinalIgnoreCase) -ge 0; $isManaged = $usesManagedProfile -and $usesPrivateCdp; $isRoot -and -not $isManaged } | Select-Object -First 1; if ($null -ne $process) { [Console]::Out.Write($process.ProcessId) }",
+            "$ErrorActionPreference = 'Stop'; $app = $env:CODEX_PANEL_CODEX_APP_PATH; $profile = $env:CODEX_PANEL_CODEX_PROFILE; $name = [IO.Path]::GetFileName($app); $all = @(Get-CimInstance Win32_Process -Filter \"Name = '$name'\" | Where-Object { $_.ExecutablePath -eq $app }); $pids = @{}; foreach ($item in $all) { $pids[[uint32]$item.ProcessId] = $true }; $process = $all | Where-Object { $command = [string]$_.CommandLine; $isRoot = -not $pids.ContainsKey([uint32]$_.ParentProcessId); $usesManagedProfile = $command.IndexOf('--user-data-dir', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $command.IndexOf($profile, [StringComparison]::OrdinalIgnoreCase) -ge 0; $usesPrivateCdp = $command.IndexOf('--remote-debugging-pipe', [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $command.IndexOf('--remote-debugging-port', [StringComparison]::OrdinalIgnoreCase) -ge 0; $isManaged = $usesManagedProfile -and $usesPrivateCdp; $isRoot -and ($env:CODEX_PANEL_INCLUDE_MANAGED -eq '1' -or -not $isManaged) } | Select-Object -First 1; if ($null -ne $process) { [Console]::Out.Write($process.ProcessId) }",
         ])
         .env("CODEX_PANEL_CODEX_APP_PATH", app_path)
         .env("CODEX_PANEL_CODEX_PROFILE", codex_profile)
+        .env("CODEX_PANEL_INCLUDE_MANAGED", if include_managed { "1" } else { "0" })
         .output()
         .map_err(|error| error.to_string())?;
     if !output.status.success() {
@@ -1480,7 +1481,7 @@ fn find_codex_app(_home_directory: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "linux")]
-fn ordinary_codex_process(app_path: &Path, codex_profile: &Path) -> Result<Option<u32>, String> {
+fn codex_process(app_path: &Path, codex_profile: &Path, include_managed: bool) -> Result<Option<u32>, String> {
     let output = StdCommand::new("/bin/ps")
         .args(["-ww", "-axo", "pid=,ppid=,command="])
         .output()
@@ -1520,8 +1521,8 @@ fn ordinary_codex_process(app_path: &Path, codex_profile: &Path) -> Result<Optio
             !processes
                 .iter()
                 .any(|(candidate_pid, _, _)| candidate_pid == parent_pid && candidate_pid != pid)
-                && !(command.contains(" --remote-debugging-pipe")
-                    && command.contains(&format!(" {managed_profile}")))
+                && (include_managed || !(command.contains(" --remote-debugging-pipe")
+                    && command.contains(&format!(" {managed_profile}"))))
         })
         .map(|(pid, _, _)| *pid))
 }
@@ -1674,7 +1675,7 @@ fn monitor_renderer_readiness(
         let restart_required = !status.ready && {
             let app_path = state.snapshot.lock().unwrap().app_path.clone();
             app_path.as_deref().is_some_and(|path| {
-                ordinary_codex_process(Path::new(path))
+                codex_process(Path::new(path), &state.data_directory.join("codex-profile"), false)
                     .ok()
                     .flatten()
                     .is_some()
@@ -2093,11 +2094,8 @@ fn confirm_ordinary_codex_restart(
     state: &LauncherState,
     codex_app: &Path,
 ) -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    let ordinary_codex_pid = ordinary_codex_process(codex_app)?;
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
     let ordinary_codex_pid =
-        ordinary_codex_process(codex_app, &state.data_directory.join("codex-profile"))?;
+        codex_process(codex_app, &state.data_directory.join("codex-profile"), false)?;
     if let Some(codex_pid) = ordinary_codex_pid {
         if !UpdateDialog::confirm_codex_restart(app) {
             append_log(state, "Codex restart deferred by user");
@@ -2435,6 +2433,7 @@ fn start_launcher(
 fn restart_launcher(
     app: &AppHandle,
     state: &Arc<LauncherState>,
+    restart_codex: bool,
 ) -> Result<LauncherSnapshot, String> {
     let (result, result_generation) = {
         let _lifecycle = state.lifecycle.lock().unwrap();
@@ -2452,12 +2451,31 @@ fn restart_launcher(
             let snapshot = state.snapshot.lock().unwrap();
             snapshot.phase == "restart_required" || snapshot.open_request_pending
         };
-        if !confirm_ordinary_codex_restart(app, state, &codex_app)? {
-            return Ok(state.snapshot.lock().unwrap().clone());
-        }
+        let codex_pid = if restart_codex {
+            let pid = codex_process(&codex_app, &state.data_directory.join("codex-profile"), true)?;
+            if pid.is_some() && !UpdateDialog::confirm_codex_restart(app) {
+                return Ok(state.snapshot.lock().unwrap().clone());
+            }
+            pid
+        } else {
+            if !confirm_ordinary_codex_restart(app, state, &codex_app)? {
+                return Ok(state.snapshot.lock().unwrap().clone());
+            }
+            None
+        };
+        // 先停自动重连，避免退出 Codex 时 injector 抢先重新启动旧配置的进程。
         stop_managed_child_locked(app, state);
         reset_recovery(state);
-        let result = start_launcher_locked(app, state, should_open);
+        let result = (|| {
+            if let Some(pid) = codex_pid {
+                append_log(state, &format!("Requesting explicit Codex restart for PID {pid}"));
+                // Pipe 模式下 Codex 可能已随 injector 的进程组退出。
+                if codex_process(&codex_app, &state.data_directory.join("codex-profile"), true)? == Some(pid) {
+                    quit_codex_normally(pid)?;
+                }
+            }
+            start_launcher_locked(app, state, should_open)
+        })();
         if result.is_err() {
             state.intentional_stop.store(false, Ordering::SeqCst);
         }
@@ -2556,7 +2574,21 @@ async fn reconnect_codex(
 ) -> Result<LauncherUiState, String> {
     let state = Arc::clone(state.inner());
     tauri::async_runtime::spawn_blocking(move || {
-        restart_launcher(&app, &state)?;
+        restart_launcher(&app, &state, false)?;
+        current_ui_state(&app, &state)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn restart_codex(
+    app: AppHandle,
+    state: State<'_, Arc<LauncherState>>,
+) -> Result<LauncherUiState, String> {
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        restart_launcher(&app, &state, true)?;
         current_ui_state(&app, &state)
     })
     .await
@@ -2990,6 +3022,7 @@ fn main() {
             start_service,
             stop_service,
             reconnect_codex,
+            restart_codex,
             open_embedded_panel,
             open_browser_panel,
             open_codex,
@@ -3256,7 +3289,7 @@ fn main() {
                         let app = app.clone();
                         tauri::async_runtime::spawn_blocking(move || {
                             let _diagnostic = menu_diagnostics::Span::new(&state.log_path, "worker id=restart-service");
-                            if let Err(error) = restart_launcher(&app, &state) {
+                            if let Err(error) = restart_launcher(&app, &state, false) {
                                 append_log(
                                     &state,
                                     &format!("Launcher menu restart failed: {error}"),
