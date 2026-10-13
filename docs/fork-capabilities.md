@@ -74,6 +74,8 @@ Each project dashboard asks Codex for a daily progress summary. A failed generat
 
 ## Tauri/Rust desktop manager
 
+On macOS, native and menu quit requests share a single background cleanup. The interface keeps processing events while managed processes stop; exit follows cleanup. Update installation retains its existing quit protection and restart path.
+
 The launcher and its embedded workflow editor use React with Radix Themes for consistent controls in light and dark mode. Runtime actions still use the existing Tauri command/event interface. For source builds, `npm run build:launcher` generates `dist/launcher`; `npm run app:prepare` builds both the Panel Web UI and launcher before packaging the runtime.
 
 ### Exhausted-usage banner visibility
@@ -85,6 +87,8 @@ The launcher separates **运行概览** (Runtime overview), with service status 
 This identifies account and workspace exhausted-usage banners by their React component business type, independently of title wording or language. It leaves other errors, model/image limits, account quotas, and usage enforcement unchanged. Unknown banner types or a future incompatible Codex component structure remain visible. Panel does not patch the installed Codex application.
 
 ### Custom-provider send availability
+
+Prepared mappings are reused if injection retries before the lazy composer module executes. Preference changes still apply to the existing quota and Ultrafast subscriptions; both adapters share the same module mapping.
 
 On reinjection, the adapter also discovers the original composer URL from existing import maps, so blob loading does not remove its adaptation.
 
@@ -137,6 +141,8 @@ CODEX_PANEL_HOST=127.0.0.1 npm run codex
 The wait duration is fixed. If no main renderer appears within 30 seconds, the launcher exits with `Timed out waiting for a Codex renderer target`.
 
 ## Switch between Panel and native Codex destinations
+
+When Codex retains multiple sidebars, Panel skips hidden or inert copies and moves its existing entry to the available sidebar as interactivity changes. Placement remains before Explore when that rail anchor exists, with the existing content-sidebar fallbacks otherwise. No setting is required.
 
 The rail entry preserves its native icon wrapper and alignment, uses the native inactive text color, and retains its original selected color. Native icons keep one React-owned SVG to avoid duplicate artwork during selection changes. Only history entries created by opening Panel, including their same-URL state replacements, can restore it; cached state copied into a new native destination does not reopen Panel. Clicking the currently selected native destination returns to that page without going back to a different destination.
 

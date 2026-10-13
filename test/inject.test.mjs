@@ -241,7 +241,7 @@ test("embedded page supports ordinary loopback and authenticated opaque modes", 
 
 test("entry clones the native Explore rail button and the page covers the complete Codex workspace", () => {
   assert.match(source, /const EXPLORE_LABELS = \["探索", "explore"\]/);
-  assert.match(source, /document\.querySelector\("nav\[data-app-navigation-rail\]"\)/);
+  assert.match(source, /document\.querySelectorAll\("nav\[data-app-navigation-rail\]"\)/);
   assert.match(source, /button\.getAttribute\(OWNED_ATTRIBUTE\) !== "true"/);
 
   assert.match(source, /const button = reference\.cloneNode\(true\)/);
@@ -269,6 +269,7 @@ test("entry recognizes the Explore rail labels", () => {
   );
   let currentButtons;
   const rail = {
+    closest: () => null, getBoundingClientRect: () => ({height: 30}),
     querySelectorAll: (selector) => selector.startsWith("button") ? currentButtons : [],
   };
   const findReferenceButton = vm.runInNewContext(`(() => {
@@ -278,7 +279,7 @@ test("entry recognizes the Explore rail labels", () => {
     ${referenceSource}
     return findReferenceButton;
   })()`, {
-    document: { querySelector: () => rail },
+    document: { querySelector: () => rail, querySelectorAll: selector => selector === "nav[data-app-navigation-rail]" ? [rail] : [] },
   });
 
   for (const textContent of ["探索", "Explore"]) {
@@ -1855,6 +1856,7 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
   let currentButtons;
   let currentSection;
   const scroll = {
+    closest: () => null, getBoundingClientRect: () => ({height:30}),
     querySelector: (selector) => selector === "[data-app-action-sidebar-section]" ? currentSection : null,
     querySelectorAll: (selector) => selector.startsWith("button") ? currentButtons : [],
   };
@@ -1866,12 +1868,13 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
     ${referenceSource}
     return findReferenceButton;
   })()`, {
-    document: { querySelector: (selector) => selector === "[data-app-action-sidebar-scroll]" ? scroll : null },
+    document: { querySelectorAll: (selector) => selector === "[data-app-action-sidebar-scroll]" ? [scroll] : [] },
   });
 
   for (const textContent of ["插件", "外掛程式", "プラグイン", "Plugins"]) {
     const currentButton = {
       textContent,
+      closest: () => null, getBoundingClientRect: () => ({height:30}),
       getAttribute: () => null,
       parentElement: {},
     };
@@ -1882,6 +1885,7 @@ test("entry recognizes known Plugins labels and structurally anchors an unenumer
 
   const topButton = (textContent, top, owned = false) => ({
     textContent,
+    closest: () => null,
     getAttribute: (name) => name === "data-codex-panel-owned" && owned ? "true" : null,
     getBoundingClientRect: () => ({ top, bottom: top + 30, height: 30 }),
     parentElement: {},

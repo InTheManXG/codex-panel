@@ -46,6 +46,7 @@ export function createCodexProviderQuotaRuntime(initialEnabled) {
   const listeners = new Set();
   return {
     installed: false,
+    prepared: false,
     getSnapshot: () => enabled,
     subscribe(listener) {
       listeners.add(listener);
@@ -134,7 +135,8 @@ export async function prepareCodexProviderQuotaFix(cdp, preferencesFile, report 
       runtime.setEnabled(${preferences.customProviderQuotaFix === true});
       const ultrafast = globalThis.__codexPanelProviderUltrafastV1__ ??= (${createCodexProviderQuotaRuntime.toString()})(${preferences.customProviderUltrafast === true});
       ultrafast.setEnabled(${preferences.customProviderUltrafast === true});
-      if (runtime.installed) return;
+      // 首页可能延迟加载输入框模块；映射准备成功后无需重复安装。
+      if (runtime.installed || runtime.prepared) return;
       const install = () => {
         if (!document.documentElement) return;
         observer.disconnect();
@@ -144,6 +146,7 @@ export async function prepareCodexProviderQuotaFix(cdp, preferencesFile, report 
         map.type = "importmap";
         map.textContent = JSON.stringify({ imports });
         document.documentElement.prepend(map);
+        runtime.prepared = true;
       };
       const observer = new MutationObserver(install);
       observer.observe(document, { childList: true });

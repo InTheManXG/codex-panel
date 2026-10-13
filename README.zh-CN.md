@@ -1,5 +1,7 @@
 # Codex Panel
 
+macOS 退出在后台单次清理托管进程，避免界面等待清理而卡住。多个隐藏或不可交互侧栏并存时，面板选择可用侧栏并保留原有入口位置；输入框尚未加载时，注入重试复用已准备的自定义 API 模块映射。参见[桌面管理器](docs/fork-capabilities.md#taurirust-desktop-manager)和[侧栏导航](docs/fork-capabilities.md#switch-between-panel-and-native-codex-destinations)。
+
 在 **偏好设置 → 显示与系统 → 显示自定义 API 的 Ultrafast 选项** 开启独立开关，仅为本地自定义 provider 的 `gpt-6-astra` 和 `gpt-6.1-sol` 显示 Ultrafast，与 2026-10-13 核实的[官方支持名单](https://learn.chatgpt.com/docs/agent-configuration/speed#ultrafast-mode)一致；其他模型及自定义别名不放行。默认关闭；适配加载后切换即时生效，选择仍走原生保存与请求路径，官方 OpenAI 和远程主机保留原生规则。首次安装或更新适配需要重载一次界面。关闭仅恢复原生权限判断，不删除已保存的速度偏好；实际速度与计费由 provider 决定。客户端结构不兼容时保留原生行为并记录不可用日志。范围为原生输入框菜单与普通发送；工具创建对话、通知回复仍保留各自原生检查。
 
 打开任务面板时自动读取已有的账号姓名和头像，不再主动展开原生头像菜单。

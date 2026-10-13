@@ -6,6 +6,10 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Keep the macOS interface responsive while quitting by cleaning up managed processes once in the background.
+- Keep the Panel entry attached to an available sidebar when hidden or inactive sidebars coexist, preserving its existing position.
+- Reuse prepared custom-provider module mappings during injection retries before the composer loads.
+
 - Added an off-by-default preference to show Ultrafast in the native speed menu for GPT-6 Astra and GPT-6.1 Sol on local custom API providers, independently of ChatGPT account eligibility.
 
 - Fix false missing-Skill errors after successful native task prefill or submission, and preserve conversation linking when the draft is sent immediately.
