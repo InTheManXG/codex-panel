@@ -120,6 +120,8 @@ Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标�
 
 ## 活跃 Fork 能力
 
+- 原生预填成功后的误报修复（本次变更，等待上游吸收）：`waitForPreparedComposer` 只选择可见输入框；本地路径在预填前定位并记录待发送关联，Skill 与全文校验仍由 Launcher 完成，成功后不再要求草稿留在输入框。发送监听先于预填，关联确认等待准备结束，已有会话保留 `previousTurnId`；预填失败清理待关联并保留真实错误。代码：`inject/codex-panel.user.js`；针对性验证：`test/inject-composer-preparation.test.mjs`、`test/inject.test.mjs`、`test/injector-composer-prefill.test.mjs`。用户说明：中英文 README、CHANGELOG 与 `docs/fork-capabilities.md#link-jira-requirements-to-repository-issues`。来源定位：`git log -S'预填充由 Launcher 校验' -- inject/codex-panel.user.js`。合并保留先监听发送、后确认实际会话的顺序；上游等价处理可见输入框与立即发送后移除。
+
 - 原生对话预填诊断（维护用途）：`scripts/codex-injector.mjs` 记录 `panel.app-server.request` 的方法、请求 ID、host、会话 ID、实际超时、耗时及响应匹配计数；`panel.composer.prepare` 区分读取上一轮与预填，`panel.composer.prefill` 定位编辑器、Skill、文本插入及确认阶段。日志进入启动器 stderr，不记录提示词、消息正文、凭据或 Skill 路径。不调整超时或重试语义。验证：`node --test test/injector.test.mjs`；来源定位：`git log -S'panel.app-server.request' -- scripts/codex-injector.mjs`。待真实复现定位根因后重新评估日志保留范围。
 
 ### 全局可定制 AI 工作流

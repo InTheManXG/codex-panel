@@ -1119,6 +1119,8 @@
 
   async function publishPendingThreadAssociation() {
     if (!isTrustedPanelOrigin()) return;
+    // 发送可以先发生，关联必须等预填校验和上一轮标识准备完毕。
+    if (pendingThreadCreation) return;
     const pending = pendingThreadAssociation;
     if (!pending) return;
     if (Date.now() > pending.expiresAt) {
@@ -1392,22 +1394,16 @@
     }
   }
 
-  async function waitForPreparedComposer(identifier, skills) {
+  async function waitForPreparedComposer(identifier = "") {
     const deadline = Date.now() + 8_000;
     while (Date.now() < deadline) {
-      const editor = document.querySelector('[data-codex-composer="true"][contenteditable="true"]');
-      if (editor && editor.getClientRects().length > 0) {
-        const containsIdentifier = normalizedLabel(editor.textContent).includes(normalizedLabel(identifier));
-        const mentions = Array.from(editor.querySelectorAll("[skill-mention-name]"));
-        const skillsReady = skills.every((skill) => mentions.some((mention) => (
-          mention.getAttribute("skill-mention-name") === skill.name
-          && mention.getAttribute("skill-mention-path") === skill.path
-        )));
-        if (containsIdentifier && skillsReady) return editor;
-      }
+      const editor = Array.from(document.querySelectorAll(
+        '[data-codex-composer="true"][contenteditable="true"]',
+      )).find((candidate) => candidate.getClientRects().length > 0);
+      if (editor && (!identifier || normalizedLabel(editor.textContent).includes(normalizedLabel(identifier)))) return editor;
       await new Promise((resolve) => window.setTimeout(resolve, 80));
     }
-    throw new Error("Codex 对话输入框没有生成 manage-panel Skill 引用");
+    throw new Error(identifier ? "Codex 对话输入框未显示预期的任务内容" : "Codex 未显示可用的对话输入框");
   }
 
   async function waitForNativeProject(targetRoot, expectedProjectId) {
@@ -1577,14 +1573,11 @@
         if (normalizeThreadId(threadIdFromLocation()) !== binding.threadId) {
           throw new Error("Codex 未确认已切换到绑定对话");
         }
-        const prepared = await requestHostTaskComposerPrefill({
-          instruction, skills: skillReferences, threadId: binding.threadId,
-        });
-        const composer = await waitForPreparedComposer(identifier, []);
+        const composer = await waitForPreparedComposer();
         await selectNativeCollaborationMode(payload.collaborationMode === "plan" ? "plan" : "default", composer);
         setPendingThreadAssociation({
           taskId, identifier, title, composer, existingThreadIds: nativeThreadIds(),
-          threadId: binding.threadId, previousTurnId: prepared.previousTurnId,
+          threadId: binding.threadId,
           developmentContext: payload.developmentContext,
           executionPreparation: true, useWorktree: false,
           planningPreparation: payload.planningPreparation === true,
@@ -1592,6 +1585,11 @@
           workspacePath: binding.workspacePath, submitted: false, confirming: false,
           expiresAt: Date.now() + THREAD_ASSOCIATION_TIMEOUT_MS,
         });
+        const prepared = await requestHostTaskComposerPrefill({
+          instruction, skills: skillReferences, threadId: binding.threadId,
+        });
+        pendingThreadAssociation.previousTurnId = prepared.previousTurnId;
+        persistPendingThreadAssociation();
         postToFrame({ type: "panel:thread-prepared", payload: { taskId } });
         return;
       }
@@ -1671,7 +1669,7 @@
             prefillPrompt: instruction,
           },
         });
-        const composer = await waitForPreparedComposer(identifier, []);
+        const composer = await waitForPreparedComposer(identifier);
         await selectNativeCollaborationMode(payload.collaborationMode, composer);
         setPendingThreadAssociation({
           taskId,
@@ -1740,6 +1738,28 @@
       if (autoSubmit || payload.executionPreparation) {
         await selectNativeWorktree(payload.useWorktree !== false);
       }
+      const composer = await waitForPreparedComposer();
+      await selectNativeCollaborationMode(autoSubmit ? "default" : payload.collaborationMode, composer);
+      const selectedProjectId = projectless
+        ? ""
+        : (await selectedNativeProjectId()) || payload.codexProjectId;
+      // 预填充由 Launcher 校验；先记录发送，避免成功提交清空草稿后再校验而误报。
+      if (!autoSubmit) setPendingThreadAssociation({
+        taskId,
+        identifier,
+        title,
+        composer,
+        existingThreadIds,
+        projectId: selectedProjectId,
+        codexHostId: "local",
+        workspacePath,
+        executionPreparation: payload.executionPreparation === true,
+        planningPreparation: payload.planningPreparation === true,
+        useWorktree: payload.useWorktree === true,
+        submitted: false,
+        confirming: false,
+        expiresAt: Date.now() + THREAD_ASSOCIATION_TIMEOUT_MS,
+      });
       await requestHostTaskComposerPrefill({
         instruction,
         skillDisplayName,
@@ -1747,11 +1767,6 @@
         skillPath,
         skills: skillReferences,
       });
-      const composer = await waitForPreparedComposer(identifier, []);
-      await selectNativeCollaborationMode(autoSubmit ? "default" : payload.collaborationMode, composer);
-      const selectedProjectId = projectless
-        ? ""
-        : (await selectedNativeProjectId()) || payload.codexProjectId;
       if (autoSubmit) {
         const started = await requestHostTaskConversationStart({
           taskId,
@@ -1772,24 +1787,9 @@
         });
         return;
       }
-      setPendingThreadAssociation({
-        taskId,
-        identifier,
-        title,
-        composer,
-        existingThreadIds,
-        projectId: selectedProjectId,
-        codexHostId: "local",
-        workspacePath,
-        executionPreparation: payload.executionPreparation === true,
-        planningPreparation: payload.planningPreparation === true,
-        useWorktree: payload.useWorktree === true,
-        submitted: false,
-        confirming: false,
-        expiresAt: Date.now() + THREAD_ASSOCIATION_TIMEOUT_MS,
-      });
       postToFrame({ type: "panel:thread-prepared", payload: { taskId } });
     } catch (error) {
+      setPendingThreadAssociation(null);
       if (autoSubmit && reservationId) {
         try {
           await requestHost("fail-native-claim", {
@@ -1813,6 +1813,7 @@
       });
     } finally {
       pendingThreadCreation = null;
+      void publishPendingThreadAssociation();
     }
   }
 

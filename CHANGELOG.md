@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Fix false missing-Skill errors after successful native task prefill or submission, and preserve conversation linking when the draft is sent immediately.
+
 - Fix Panel immediately closing, flickering, or opening the native profile menu. Keep automatic name and avatar capture, restore icon alignment and inactive color, and preserve Back/Forward navigation.
 
 - Preserve the current Codex conversation and draft across Panel service restarts and mount retries when the patch code is unchanged. Installing or updating the patch still reloads once.
