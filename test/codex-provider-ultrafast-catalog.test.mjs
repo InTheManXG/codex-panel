@@ -157,7 +157,7 @@ test("real Codex core sends Ultrafast after adapter setup and restart, then rest
 model_provider = "probe"
 check_for_update_on_startup = false
 [features]
-ultrafast_mode = true
+api_key_model_discovery = true
 [analytics]
 enabled = false
 [model_providers.probe]
@@ -193,6 +193,11 @@ stream_max_retries = 0
   t.after(() => adapter.close());
   await adapter.sync();
   client = createClient();
+  // The explicit user setting wins over the desktop assignment; Panel leaves it alone.
+  await client.request("experimentalFeature/enablement/set", { enablement: { api_key_model_discovery: false } });
+  const listing = await client.request("model/list", { includeHidden: true });
+  assert.ok(listing.data.length > 0, "explicit user discovery setting keeps the model picker available");
+  assert.equal(parse(await readFile(configFile, "utf8")).features.api_key_model_discovery, true);
   await send(client, threadId);
   assert.equal(bodies.at(-1).service_tier, "ultrafast", "resumed native thread must forward the selected tier");
   await send(client, null, "gpt-6.1-sol");
@@ -203,6 +208,7 @@ stream_max_retries = 0
   const restored = parse(await readFile(configFile, "utf8"));
   assert.equal(restored.model_providers.probe.model_catalog_url, undefined);
   assert.equal(restored.model_catalog_json, undefined);
+  assert.equal(restored.features.api_key_model_discovery, true, "disabling Ultrafast preserves the user discovery setting");
   client = createClient();
   await send(client, threadId);
   assert.equal(bodies.at(-1).service_tier, undefined);
