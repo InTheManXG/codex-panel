@@ -8,11 +8,11 @@
 
 - 在 Codex 连接卡片增加独立的“重启 Codex”操作，确认后完整重启并重新加载核心配置。
 
-- 修复自定义 API 选择 Ultrafast 后，核心在发送前丢弃速度参数的问题；更改开关后需重启 Codex，并保持 Panel 运行以提供适配后的模型目录。
+- 修复自定义 API 选择 Ultrafast 后，核心在发送前丢弃速度参数的问题；需先在 Codex 的 `config.toml` 中开启 `[features]` 下的 `api_key_model_discovery = true`，Panel 不修改此设置；更改 Ultrafast 开关后需重启 Codex，并保持 Panel 运行。
 
 - 退出时在后台单次清理托管进程，避免 macOS 界面等待清理而卡住。
 - 多个隐藏或不可交互的侧栏并存时，将面板入口挂到可用侧栏，保留原有入口位置。
-- 输入框延迟加载期间，注入重试复用已准备的自定义 API 模块映射。
+- 输入框延迟加载期间，注入重试复用已准备的自定义 API 模块映射。上述退出、侧栏与注入修复包含 [@InTheManXG](https://github.com/InTheManXG) 在 [#28](https://github.com/shay-wong/codex-panel/pull/28) 的贡献。
 
 - 新增默认关闭的独立开关，仅为本地自定义 API 的 GPT-6 Astra、GPT-6.1 Sol 显示原生 Ultrafast 速度选项，不再受 ChatGPT 账号资格影响。
 

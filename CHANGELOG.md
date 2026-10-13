@@ -8,11 +8,11 @@ This file records user-visible changes introduced by the fork.
 
 - Add a separate Restart Codex action to the Codex connection card to reload core configuration after confirmation.
 
-- Fix custom-provider Ultrafast selections losing their tier before API submission. Restart Codex after changing the switch and keep Panel running to load the adapted core model catalog.
+- Fix custom-provider Ultrafast selections losing their tier before API submission. First enable `api_key_model_discovery = true` under `[features]` in your Codex `config.toml`; Panel leaves this setting unchanged. Restart Codex after changing the Ultrafast switch and keep Panel running.
 
 - Keep the macOS interface responsive while quitting by cleaning up managed processes once in the background.
 - Keep the Panel entry attached to an available sidebar when hidden or inactive sidebars coexist, preserving its existing position.
-- Reuse prepared custom-provider module mappings during injection retries before the composer loads.
+- Reuse prepared custom-provider module mappings during injection retries before the composer loads. The exit, sidebar, and injection fixes include contributions by [@InTheManXG](https://github.com/InTheManXG) in [#28](https://github.com/shay-wong/codex-panel/pull/28).
 
 - Added an off-by-default preference to show Ultrafast in the native speed menu for GPT-6 Astra and GPT-6.1 Sol on local custom API providers, independently of ChatGPT account eligibility.
 
