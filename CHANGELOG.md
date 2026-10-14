@@ -9,20 +9,17 @@ This file records user-visible changes introduced by the fork.
 - Keep horizontal issue-list cards at their content height when many issues share a column, preventing priority and assignee controls from overflowing.
 - Add a Jira project filter based on synchronized issue keys, with multi-selection and an All projects reset.
 
-- Prevent Panel → Spaces → Home from reopening Panel through cached native route state; explicit native navigation dismisses Panel until its icon is clicked again.
+- Add a separate Restart Codex action to the Codex connection card to reload core configuration after confirmation.
 
-- Close the Panel overlay when a native rail destination is clicked, including Home without a route change; use muted inactive and darker active Panel icon colors, and suppress the native rail highlight while Panel is open.
+- Fix custom-provider Ultrafast selections losing their tier before API submission. First enable `api_key_model_discovery = true` under `[features]` in your Codex `config.toml`; Panel leaves this setting unchanged. Restart Codex after changing the Ultrafast switch and keep Panel running.
 
-- Move the Panel entry to the left navigation rail as an icon with a tooltip; keep it available when the content sidebar is collapsed.
+- Keep the macOS interface responsive while quitting by cleaning up managed processes once in the background.
+- Keep the Panel entry attached to an available sidebar when hidden or inactive sidebars coexist, preserving its existing position.
+- Reuse prepared custom-provider module mappings during injection retries before the composer loads. The exit, sidebar, and injection fixes include contributions by [@InTheManXG](https://github.com/InTheManXG) in [#28](https://github.com/shay-wong/codex-panel/pull/28).
 
-- Mount the Panel entry in the available sidebar instead of stopping at a retained inactive sidebar, and move the existing entry when sidebar interactivity changes.
+- Added an off-by-default preference to show Ultrafast in the native speed menu for GPT-6 Astra and GPT-6.1 Sol on local custom API providers, independently of ChatGPT account eligibility.
 
-- Avoid repeated renderer reloads when the composer adapter mapping is ready but its lazy module has not executed yet, preventing retries from repeatedly restoring another page.
-
-- Keep the UI responsive during exit by cleaning up managed processes once in a worker, releasing the child-state lock before waiting, and logging cleanup duration.
-- Avoid repeated Codex page reloads on connection retries when the injection source is unchanged and the required adapter is installed; retain necessary initial and changed-source reloads.
-
-- Remove inherited native sidebar notification dots from the Panel entry so they do not remain permanently visible.
+- Fix false missing-Skill errors after successful native task prefill or submission, and preserve conversation linking when the draft is sent immediately.
 
 - Fix Panel immediately closing, flickering, or opening the native profile menu. Keep automatic name and avatar capture, restore icon alignment and inactive color, and preserve Back/Forward navigation.
 

@@ -109,6 +109,7 @@ function pendingThreadAssociationHarness({ pending, threadId, projectMatches = t
   const functionSource = source.slice(start, end);
   return vm.runInNewContext(`(() => {
     let pendingThreadAssociation = initialPending;
+    const pendingThreadCreation = null;
     let lastNativeThreadId = "";
     const messages = [];
     const hostRequests = [];
@@ -243,7 +244,7 @@ test("entry clones the native Explore rail button and the page covers the comple
   assert.match(source, /document\.querySelectorAll\("nav\[data-app-navigation-rail\]"\)/);
   assert.match(source, /button\.getAttribute\(OWNED_ATTRIBUTE\) !== "true"/);
 
-  assert.match(source, /const button = rail \? document\.createElement\("button"\) : reference\.cloneNode\(true\)/);
+  assert.match(source, /const button = reference\.cloneNode\(true\)/);
   assert.match(source, /reference\.before\(entry\)/);
   assert.match(source, /viewport\.querySelector\("\.app-shell-main-content-frame"\)/);
   assert.match(source, /const workspace = viewport\?\.closest\("\[data-app-shell-workspace-row\]"\)/);
@@ -563,14 +564,12 @@ test("issues open an unsent native Codex composer in the exact workspace with a 
   assert.doesNotMatch(source, /prefillPrompt: prompt/);
   assert.match(source, /requestHostTaskComposerPrefill\(\{/);
   assert.match(source, /requestHost\("prefill-task-composer"/);
-  assert.match(source, /function waitForPreparedComposer\(identifier, skills\)/);
+  assert.match(source, /function waitForPreparedComposer\(identifier = ""\)/);
   assert.match(source, /lastNativeProjectId = await waitForNativeProject\(target\.targetRoot, target\.projectId\)/);
   assert.match(
     createThreadSource,
-    /await requestHostTaskComposerPrefill\([\s\S]*?await waitForPreparedComposer\(identifier, \[\]\)/,
+    /await waitForPreparedComposer\(\)[\s\S]*?await requestHostTaskComposerPrefill\(/,
   );
-  assert.match(source, /\[skill-mention-name\]/);
-  assert.match(source, /mention\.getAttribute\("skill-mention-path"\) === skill\.path/);
   assert.doesNotMatch(source, /submit\.click\(\)/);
   assert.match(source, /type: "panel:thread-prepared"/);
   assert.doesNotMatch(source, /function waitForCreatedThread/);
@@ -602,7 +601,7 @@ test("issues open an unsent native Codex composer in the exact workspace with a 
   assert.match(webApp, /type: "panel:open-thread",\s*payload: binding/);
   assert.match(source, /await waitForRemoteProject\(requestedProjectId, codexHostId, targetRoot\)/);
   assert.match(createThreadSource, /prefillPrompt: instruction/);
-  assert.match(createThreadSource, /await waitForPreparedComposer\(identifier, \[\]\)/);
+  assert.match(createThreadSource, /await waitForPreparedComposer\(identifier\)/);
   assert.match(createThreadSource, /const autoSubmit = payload\?\.autoSubmit === true/);
   assert.match(
     createThreadSource,
@@ -612,10 +611,7 @@ test("issues open an unsent native Codex composer in the exact workspace with a 
   assert.match(createThreadSource, /await selectNativeWorktree\(payload\.useWorktree !== false\)/);
   assert.match(injectorSource, /nativeDevelopmentContext\([\s\S]*?result\.thread\.cwd/);
   assert.match(injectorSource, /gitValue\(root, \["branch", "--show-current"\]\)/);
-  assert.match(
-    createThreadSource,
-    /if \(autoSubmit\) \{[\s\S]*?return;[\s\S]*?setPendingThreadAssociation\(\{/,
-  );
+  assert.match(createThreadSource, /if \(!autoSubmit\) setPendingThreadAssociation\(\{/);
   assert.doesNotMatch(createThreadSource, /Input\.dispatchKeyEvent/);
   assert.doesNotMatch(openRemoteThreadSource, /moveTaskRequest/);
   assert.match(webApp, /remoteTaskInstruction\(latestTask, comments, textRef\.current\)/);
@@ -734,6 +730,7 @@ test("execution prepares location before prefill and submits only automatic clai
       selectedNativeProjectId: async () => "project",
       requestHostTaskConversationStart: async () => { calls.push(["send"]); return { threadBinding: {} }; },
       requestHost: async (action) => { calls.push([action]); },
+      publishPendingThreadAssociation() {},
       postToFrame: (message) => { calls.push([message.type]); },
       THREAD_ASSOCIATION_TIMEOUT_MS: 60_000,
     });
@@ -790,6 +787,7 @@ test("explicit new conversation waits for its composer and never recovers the ol
       waitForPreparedComposer: async () => ({}),
       selectNativeCollaborationMode: async () => {},
       requestHost: async () => { throw new Error("must not read the old conversation"); },
+      publishPendingThreadAssociation() {},
       postToFrame: (message) => calls.push(message.type),
       THREAD_ASSOCIATION_TIMEOUT_MS: 60_000,
     });
@@ -820,6 +818,8 @@ test("planning and execution prefill the same bound conversation in the requeste
   const locationSource = source.slice(source.indexOf("function threadIdFromLocation"), source.indexOf("\n  function activeThreadRow"));
   const run = vm.runInNewContext(`(() => {
     let pendingThreadCreation = null;
+    let pendingThreadAssociation = null;
+    function setPendingThreadAssociation(value) { pendingThreadAssociation = value; savePending(value); }
     ${locationSource}
     ${createThreadSource}
     return createThreadForTask;
@@ -828,7 +828,8 @@ test("planning and execution prefill the same bound conversation in the requeste
     window: { location: { pathname: "/index.html", search: "", hash: "" }, setTimeout: (resolve) => resolve() },
     Date: { now: () => { timestamp += 1_000; return timestamp; } },
     activeThreadRow: () => ({ getAttribute: () => activeId }),
-    setPendingThreadAssociation: (value) => { pending = value; },
+    savePending: (value) => { pending = value; },
+    persistPendingThreadAssociation() {}, publishPendingThreadAssociation() {},
     openThread: async (binding) => { assert.equal(binding.threadId, "planning-thread"); },
     requestHostTaskComposerPrefill: async (draft) => { drafts.push(draft); return { previousTurnId: "previous" }; },
     waitForPreparedComposer: async () => ({}),
@@ -918,6 +919,7 @@ test('shared native execution resumes and binds without opening a new composer',
   })()`, {
     TASK_CONVERSATION_REQUEST_TIMEOUT_MS: 100,
     setPendingThreadAssociation: () => {},
+    publishPendingThreadAssociation() {},
     requestHost: async (action, payload) => {
       calls.push([action, payload]);
       return { threadBinding: binding };

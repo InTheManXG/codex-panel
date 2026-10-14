@@ -1,5 +1,9 @@
 # Codex Panel
 
+macOS 退出在后台单次清理托管进程，避免界面等待清理而卡住。多个隐藏或不可交互侧栏并存时，面板选择可用侧栏并保留原有入口位置；输入框尚未加载时，注入重试复用已准备的自定义 API 模块映射。参见[桌面管理器](docs/fork-capabilities.md#taurirust-desktop-manager)和[侧栏导航](docs/fork-capabilities.md#switch-between-panel-and-native-codex-destinations)。
+
+在 **偏好设置 → 显示与系统 → 显示自定义 API 的 Ultrafast 选项** 开启独立开关，仅为本地自定义 provider 的 `gpt-6-astra` 和 `gpt-6.1-sol` 显示 Ultrafast，与 2026-10-13 核实的[官方支持名单](https://learn.chatgpt.com/docs/agent-configuration/speed#ultrafast-mode)一致；其他模型及自定义别名不放行。默认关闭；核心模型发现需已开启（例如在 Codex 的 `config.toml` 中设置 `[features]` 下的 `api_key_model_discovery = true`），Panel 不修改此设置；同时适配菜单与自定义 provider 的核心模型目录，更改开关后请重启 Codex，使用时保持 Panel 运行。选择仍走原生保存与请求路径，确保出站请求携带 `service_tier`；官方 OpenAI 和远程主机保留原生规则。首次安装或更新适配需要重载一次界面。关闭会恢复原 provider 模型目录配置与原生权限判断，不删除已保存的速度偏好；实际速度与计费由 provider 决定。客户端结构不兼容时保留原生行为并记录不可用日志。范围为原生输入框菜单与普通发送；工具创建对话、通知回复仍保留各自原生检查。
+
 打开任务面板时自动读取已有的账号姓名和头像，不再主动展开原生头像菜单。
 任务面板导航栏入口保留原生图标对齐和未选中颜色，选中颜色不变；点击原生页面不会因缓存的面板标记而重新打开面板。 Codex 原地更新当前页面状态时，侧边栏和 App 打开的面板都会保持显示。 其他 Codex 窗口挂载重试时，已连接主窗口的连接状态保持就绪，无需点击打开面板刷新。 独立 Page 文档窗口及其隐藏预热窗口不注入 Panel；主窗口内的 Page 不受影响。补丁代码未变时，挂载重试与 Panel 服务重启均保留 Codex 当前页面和草稿；首次安装或更新补丁仍重载一次。
 macOS 上 Codex 更新后，连接端口可用时 Panel 自动重连；启动参数丢失时，管理窗口会提示“重启 Codex 并连接”，确认后才重启 Codex。详见[更新后恢复连接](docs/codex-compatibility.md#recovery-after-desktop-updates)。
@@ -23,6 +27,7 @@ Jira 会话绑定、规划初始化和聊天模型选择统一使用分页模型
 
 继续规划以实际激活的原生会话确认导航，窗口 URL 未变化时也能继续预填。手动执行进入处理中后，详情按钮与卡片共用运行状态：显示“正在处理 · 查看对话”或“处理中 · 查看对话”，点击打开原会话；回到待认领才显示“准备执行”。已有绑定或 Jira 规划对话时，隐藏“在新对话打开”，避免重复创建。
 规划与手动执行会读取 Codex 运行位置按钮的可见文字，避免隐藏的长短标签导致预填前误判并停在空白输入框。
+本地任务草稿使用可见输入框，预填完成后立即发送也能继续关联对话，不再将成功提交误报为缺少 Skill。
 
 普通任务（包括 backlog 主任务）也可以使用 **AI 规划**：默认预填原生 Plan 草稿，手动发送后只绑定会话，不进入执行。详情页的 **规划 Spec** 支持编写、编辑与持久化查看；Agent 使用 `panelctl issue planning get/save`，保存前读取 `plan.version`，过期版本会拒绝覆盖。Spec 保留在主任务，不替换描述。确认拆分后，可用 `issue create --status backlog` 和 `issue relation` 创建同一项目内的多个子任务及前置依赖，已有子任务继续复用，创建不会启动执行。之后明确授权实现时，可以在原会话继续，并读取已保存的 Spec。只有 Jira 需求才增加关联仓库、Jira 状态同步和 `jira planning publish` 发布处理。
 
@@ -152,6 +157,8 @@ npm run codex:install
 ```bash
 open "$HOME/Applications/Codex Panel.app"
 ```
+
+运行概览的 **Codex 连接 → 重启 Codex** 可在确认后完整退出并重新启动 Codex，重新加载核心配置（包括 Ultrafast 模型目录）；正在运行的任务会中断。**Panel 服务 → 重启服务** 在连接正常时只重启 Panel 并重新连接。
 
 应用常驻 macOS 菜单栏。菜单会显示当前运行状态，并提供打开内嵌 Panel、一个随状态切换的启动/停止项、独立的重启服务操作，以及浏览器、日志和数据目录入口；浏览器和重启操作只在服务运行时启用。菜单还可分别控制开机自启动、应用启动时连接 Codex、连接后自动打开 Panel；后两项默认开启。只有当前注入已挂载到 renderer 并持续发布新鲜心跳时，状态才显示“正常”。受管集成意外退出后会按 2、5、15 秒重试；60 秒内第四次失败后停止自动恢复。
 

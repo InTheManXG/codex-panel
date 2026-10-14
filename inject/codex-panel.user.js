@@ -233,32 +233,6 @@
       #${ENTRY_ID}:not([aria-current="page"]) {
         color: var(--button-text-color, var(--color-token-foreground, inherit));
       }
-      #${ENTRY_ID}[data-codex-panel-rail="true"] {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        align-self: center;
-        flex: none;
-        width: var(--height-token-nav-row, 36px);
-        height: var(--height-token-nav-row, 36px);
-        padding: 0;
-        margin-top: 8px;
-        color: var(--color-text-tertiary, var(--color-token-text-secondary, #888));
-        background: transparent;
-        border-radius: var(--radius-token-row, 10px);
-        -webkit-app-region: no-drag;
-      }
-      #${ENTRY_ID}[data-codex-panel-rail="true"][aria-current="page"] {
-        color: var(--color-text-primary, var(--color-token-foreground, #222));
-        background: var(--color-token-list-hover-background, color-mix(in srgb, currentColor 8%, transparent));
-      }
-      #${ENTRY_ID}[data-codex-panel-rail="true"]:hover {
-        background: var(--color-token-list-hover-background, color-mix(in srgb, currentColor 8%, transparent));
-      }
-      #${ENTRY_ID}[data-codex-panel-rail="true"] svg {
-        width: 20px;
-        height: 20px;
-      }
       #${ENTRY_ID}[aria-current="page"] {
         background: var(--color-token-list-hover-background, color-mix(in srgb, currentColor 8%, transparent));
         color: var(--color-token-foreground, inherit);
@@ -466,10 +440,8 @@
     `;
   }
 
-  function createEntry(reference, rail = false) {
-    // 图标栏使用独立按钮，不继承原生拖拽及导航状态。
-    const button = rail ? document.createElement("button") : reference.cloneNode(true);
-    if (rail) button.className = reference.className;
+  function createEntry(reference) {
+    const button = reference.cloneNode(true);
     button.id = ENTRY_ID;
     button.type = "button";
     button.removeAttribute("disabled");
@@ -502,10 +474,6 @@
       }
     } else button.textContent = "任务面板";
     replaceEntryIcon(button);
-    if (rail) {
-      button.setAttribute("data-codex-panel-rail", "true");
-      button.replaceChildren(button.querySelector("svg"));
-    }
     button.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -537,28 +505,8 @@
   function ensureEntry() {
     if (destroyed || !document.body) return;
     installStyles();
-    // 左侧图标栏独立于展开的内容侧边栏；挂在可滚动导航区末尾、头像区之前。
-    const rail = Array.from(document.querySelectorAll("[data-app-navigation-rail]"))
-      .find((node) => !node.closest("[inert], [hidden]") && node.getBoundingClientRect().height > 0);
-    const railReference = Array.from(rail?.querySelectorAll("[data-sidebar-destination]") || [])
-      .find((node) => node.getBoundingClientRect().height > 0);
-    const railList = railReference?.closest(".overflow-y-auto");
-    if (railList && rail.contains(railList)) {
-      if (entry?.getAttribute("data-codex-panel-rail") !== "true") {
-        entry?.remove();
-        entry = createEntry(railReference, true);
-      }
-      if (entry.parentElement !== railList) railList.appendChild(entry);
-      syncEntryState();
-      return;
-    }
     const reference = findReferenceButton();
     if (!reference?.parentElement) return;
-    // 没有图标栏的旧布局继续沿用原入口，不将图标样式带入文字导航。
-    if (entry?.getAttribute("data-codex-panel-rail") === "true") {
-      entry.remove();
-      entry = null;
-    }
     // 新聊天按钮可能只是横向行的一部分；在整行之后挂载，不能挤入快速聊天所在的行内。
     const row = reference.parentElement.closest(".sidebar-item") || reference;
     if (!entry) entry = createEntry(reference);
@@ -566,7 +514,9 @@
     entry.style.flex = row !== reference ? "none" : "";
     entry.style.width = row !== reference ? "100%" : "";
     if (reference.closest("nav[data-app-navigation-rail]")) {
-      if (entry.parentElement !== reference.parentElement || entry.nextElementSibling !== reference) reference.before(entry);
+      if (entry.parentElement !== reference.parentElement || entry.nextElementSibling !== reference) {
+        reference.before(entry);
+      }
     } else if (entry.parentElement !== row.parentElement || entry.previousElementSibling !== row) {
       row.after(entry);
     }
@@ -1172,6 +1122,8 @@
 
   async function publishPendingThreadAssociation() {
     if (!isTrustedPanelOrigin()) return;
+    // 发送可以先发生，关联必须等预填校验和上一轮标识准备完毕。
+    if (pendingThreadCreation) return;
     const pending = pendingThreadAssociation;
     if (!pending) return;
     if (Date.now() > pending.expiresAt) {
@@ -1445,22 +1397,16 @@
     }
   }
 
-  async function waitForPreparedComposer(identifier, skills) {
+  async function waitForPreparedComposer(identifier = "") {
     const deadline = Date.now() + 8_000;
     while (Date.now() < deadline) {
-      const editor = document.querySelector('[data-codex-composer="true"][contenteditable="true"]');
-      if (editor && editor.getClientRects().length > 0) {
-        const containsIdentifier = normalizedLabel(editor.textContent).includes(normalizedLabel(identifier));
-        const mentions = Array.from(editor.querySelectorAll("[skill-mention-name]"));
-        const skillsReady = skills.every((skill) => mentions.some((mention) => (
-          mention.getAttribute("skill-mention-name") === skill.name
-          && mention.getAttribute("skill-mention-path") === skill.path
-        )));
-        if (containsIdentifier && skillsReady) return editor;
-      }
+      const editor = Array.from(document.querySelectorAll(
+        '[data-codex-composer="true"][contenteditable="true"]',
+      )).find((candidate) => candidate.getClientRects().length > 0);
+      if (editor && (!identifier || normalizedLabel(editor.textContent).includes(normalizedLabel(identifier)))) return editor;
       await new Promise((resolve) => window.setTimeout(resolve, 80));
     }
-    throw new Error("Codex 对话输入框没有生成 manage-panel Skill 引用");
+    throw new Error(identifier ? "Codex 对话输入框未显示预期的任务内容" : "Codex 未显示可用的对话输入框");
   }
 
   async function waitForNativeProject(targetRoot, expectedProjectId) {
@@ -1630,14 +1576,11 @@
         if (normalizeThreadId(threadIdFromLocation()) !== binding.threadId) {
           throw new Error("Codex 未确认已切换到绑定对话");
         }
-        const prepared = await requestHostTaskComposerPrefill({
-          instruction, skills: skillReferences, threadId: binding.threadId,
-        });
-        const composer = await waitForPreparedComposer(identifier, []);
+        const composer = await waitForPreparedComposer();
         await selectNativeCollaborationMode(payload.collaborationMode === "plan" ? "plan" : "default", composer);
         setPendingThreadAssociation({
           taskId, identifier, title, composer, existingThreadIds: nativeThreadIds(),
-          threadId: binding.threadId, previousTurnId: prepared.previousTurnId,
+          threadId: binding.threadId,
           developmentContext: payload.developmentContext,
           executionPreparation: true, useWorktree: false,
           planningPreparation: payload.planningPreparation === true,
@@ -1645,6 +1588,11 @@
           workspacePath: binding.workspacePath, submitted: false, confirming: false,
           expiresAt: Date.now() + THREAD_ASSOCIATION_TIMEOUT_MS,
         });
+        const prepared = await requestHostTaskComposerPrefill({
+          instruction, skills: skillReferences, threadId: binding.threadId,
+        });
+        pendingThreadAssociation.previousTurnId = prepared.previousTurnId;
+        persistPendingThreadAssociation();
         postToFrame({ type: "panel:thread-prepared", payload: { taskId } });
         return;
       }
@@ -1724,7 +1672,7 @@
             prefillPrompt: instruction,
           },
         });
-        const composer = await waitForPreparedComposer(identifier, []);
+        const composer = await waitForPreparedComposer(identifier);
         await selectNativeCollaborationMode(payload.collaborationMode, composer);
         setPendingThreadAssociation({
           taskId,
@@ -1793,6 +1741,28 @@
       if (autoSubmit || payload.executionPreparation) {
         await selectNativeWorktree(payload.useWorktree !== false);
       }
+      const composer = await waitForPreparedComposer();
+      await selectNativeCollaborationMode(autoSubmit ? "default" : payload.collaborationMode, composer);
+      const selectedProjectId = projectless
+        ? ""
+        : (await selectedNativeProjectId()) || payload.codexProjectId;
+      // 预填充由 Launcher 校验；先记录发送，避免成功提交清空草稿后再校验而误报。
+      if (!autoSubmit) setPendingThreadAssociation({
+        taskId,
+        identifier,
+        title,
+        composer,
+        existingThreadIds,
+        projectId: selectedProjectId,
+        codexHostId: "local",
+        workspacePath,
+        executionPreparation: payload.executionPreparation === true,
+        planningPreparation: payload.planningPreparation === true,
+        useWorktree: payload.useWorktree === true,
+        submitted: false,
+        confirming: false,
+        expiresAt: Date.now() + THREAD_ASSOCIATION_TIMEOUT_MS,
+      });
       await requestHostTaskComposerPrefill({
         instruction,
         skillDisplayName,
@@ -1800,11 +1770,6 @@
         skillPath,
         skills: skillReferences,
       });
-      const composer = await waitForPreparedComposer(identifier, []);
-      await selectNativeCollaborationMode(autoSubmit ? "default" : payload.collaborationMode, composer);
-      const selectedProjectId = projectless
-        ? ""
-        : (await selectedNativeProjectId()) || payload.codexProjectId;
       if (autoSubmit) {
         const started = await requestHostTaskConversationStart({
           taskId,
@@ -1825,24 +1790,9 @@
         });
         return;
       }
-      setPendingThreadAssociation({
-        taskId,
-        identifier,
-        title,
-        composer,
-        existingThreadIds,
-        projectId: selectedProjectId,
-        codexHostId: "local",
-        workspacePath,
-        executionPreparation: payload.executionPreparation === true,
-        planningPreparation: payload.planningPreparation === true,
-        useWorktree: payload.useWorktree === true,
-        submitted: false,
-        confirming: false,
-        expiresAt: Date.now() + THREAD_ASSOCIATION_TIMEOUT_MS,
-      });
       postToFrame({ type: "panel:thread-prepared", payload: { taskId } });
     } catch (error) {
+      setPendingThreadAssociation(null);
       if (autoSubmit && reservationId) {
         try {
           await requestHost("fail-native-claim", {
@@ -1866,6 +1816,7 @@
       });
     } finally {
       pendingThreadCreation = null;
+      void publishPendingThreadAssociation();
     }
   }
 
@@ -2434,6 +2385,7 @@
       hostHeartbeatAt = Number(message.at) || 0;
       hideUsageBanner = message.hideUsageBanner === true;
       window.__codexPanelProviderQuotaV1__?.setEnabled(message.customProviderQuotaFix === true);
+      window.__codexPanelProviderUltrafastV1__?.setEnabled(message.customProviderUltrafast === true);
       syncUsageBannerVisibility();
       window[HOST_STARTUP_TOKEN_NAME] = message.startupToken ?? null;
       return;

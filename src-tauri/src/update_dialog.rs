@@ -211,7 +211,7 @@ impl UpdateDialog {
     pub(super) fn confirm_codex_restart(app: &AppHandle) -> bool {
         // 复用可置前的原生确认框，避免后台启动器的 Tauri 弹窗不可见而卡住恢复。
         let Some(dialog) = Self::prompt_message(app, "需要重启 Codex",
-            "Codex 已经更新，请点击下方按钮重新启动".into(),
+            "将退出并重新启动 Codex，正在运行的任务会中断。请先保存工作。".into(),
             "重启 Codex 并连接") else {
             return false;
         };

@@ -1,8 +1,13 @@
 # Codex Panel
 
+On macOS, quitting cleans up managed processes once in the background so the interface can remain responsive. Panel selects an available sidebar when hidden or inactive copies coexist, keeping its existing entry position. Injection retries reuse prepared custom-provider module mappings before the composer loads. See [desktop manager](docs/fork-capabilities.md#taurirust-desktop-manager) and [sidebar navigation](docs/fork-capabilities.md#switch-between-panel-and-native-codex-destinations).
+
 Opening Panel automatically reads the available account name and avatar without opening the native profile menu.
 The Panel rail entry keeps its native icon alignment and inactive color, with its selected color unchanged. Native destination clicks no longer restore a cached Panel entry. Native state updates on the same page keep Panel open from either the sidebar or the App. The connection indicator remains ready while other Codex windows are still mounting; opening Panel is not required to refresh it. Standalone Page document windows, including hidden prewarmed windows, are excluded from injection; Pages inside the main window remain supported. Mount retries and Panel service restarts preserve the current Codex page and draft when the patch code is unchanged. Installing or updating the patch still reloads once.
+Use **Overview → Codex connection → 重启 Codex** (Restart Codex) to quit and relaunch Codex after confirmation, reloading core configuration such as the Ultrafast catalog. Running tasks will be interrupted. **Restart service** only restarts Panel and reconnects when Codex is already connected.
 After Codex updates on macOS, Panel reconnects when a debugging port is available. If launch parameters were lost, the manager offers **重启 Codex 并连接** (Restart Codex and connect); restarting Codex requires confirmation. See [update recovery](docs/codex-compatibility.md#recovery-after-desktop-updates).
+
+Open **Preferences → Display & system → 显示自定义 API 的 Ultrafast 选项** to expose Ultrafast for `gpt-6-astra` and `gpt-6.1-sol` on a local custom provider that supports it. The switch defaults to off. Core model discovery must already be enabled (for example, `api_key_model_discovery = true` under `[features]` in your Codex `config.toml`); Panel leaves this setting unchanged. It updates the native speed menu and the custom provider's core model catalog; restart Codex after changing it and keep Panel running. Selection uses the native save/request path, including the outgoing `service_tier` field. Official OpenAI and remote hosts retain their native rules. First installation or an adapter update requires one reload; switching off restores the original provider catalog configuration and native checks without deleting the saved speed preference. Provider support, latency and billing remain provider-controlled; unsupported client structures keep native behavior and log adapter unavailability. See [custom-provider Ultrafast](docs/fork-capabilities.md#custom-provider-ultrafast).
 
 The custom-provider send-limit switch retains its adapter when reconnecting to a window whose composer already loads through a module mapping.
 
@@ -23,6 +28,7 @@ Jira conversation binding, planning initialization, and chat model selection use
 
 Continue planning recognizes the active native conversation even when the window URL remains unchanged. During manual execution, the detail action follows the board's conversation activity and opens the existing conversation. Tasks with an existing conversation hide the new-conversation shortcut.
 Planning and manual execution recognize the visible Codex run-location label, so hidden responsive text no longer blocks composer prefill.
+Local task drafts use the visible composer and retain conversation linking when sent immediately after prefill, without reporting a missing Skill after successful submission.
 
 The project model picker includes **6 Astra** (`gpt-6-astra`), with reasoning levels through `max` and `ultra`.
 

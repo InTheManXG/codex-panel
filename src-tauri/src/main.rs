@@ -170,6 +170,8 @@ struct LauncherPreferences {
     hide_usage_banner: bool,
     #[serde(default)]
     custom_provider_quota_fix: bool,
+    #[serde(default)]
+    custom_provider_ultrafast: bool,
 }
 
 #[derive(Serialize)]
@@ -189,6 +191,7 @@ impl Default for LauncherPreferences {
             auto_open_panel: true,
             hide_usage_banner: false,
             custom_provider_quota_fix: false,
+            custom_provider_ultrafast: false,
         }
     }
 }
@@ -317,19 +320,34 @@ struct ReleaseCheckCache {
 
 #[derive(Default)]
 struct ExitState {
+    // 只串行化退出与更新的认领，不在此锁内清理进程或操作 UI。
+    transition: Mutex<()>,
     requested: AtomicBool,
     complete: AtomicBool,
 }
 
 impl ExitState {
+    fn begin_update(&self, installing: &AtomicBool) -> bool {
+        let _transition = self.transition.lock().unwrap();
+        if self.requested.load(Ordering::SeqCst) {
+            return false;
+        }
+        installing.store(true, Ordering::SeqCst);
+        true
+    }
+
     fn begin(
         self: &Arc<Self>,
+        installing: &AtomicBool,
         cleanup: impl FnOnce() + Send + 'static,
         finish: impl FnOnce() + Send + 'static,
     ) {
         // 菜单退出、Cmd+Q 和重复点击共用一次清理；主线程不能等待生命周期锁或子进程。
-        if self.requested.swap(true, Ordering::SeqCst) {
-            return;
+        {
+            let _transition = self.transition.lock().unwrap();
+            if installing.load(Ordering::SeqCst) || self.requested.swap(true, Ordering::SeqCst) {
+                return;
+            }
         }
         let state = Arc::clone(self);
         thread::spawn(move || {
@@ -1287,7 +1305,7 @@ fn find_codex_app(home_directory: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
-fn ordinary_codex_process(app_path: &Path) -> Result<Option<u32>, String> {
+fn codex_process(app_path: &Path, _codex_profile: &Path, include_managed: bool) -> Result<Option<u32>, String> {
     let app_name = app_path
         .file_stem()
         .ok_or_else(|| "无法识别 Codex App 名称".to_string())?;
@@ -1311,7 +1329,7 @@ fn ordinary_codex_process(app_path: &Path) -> Result<Option<u32>, String> {
         if command != executable && !command.starts_with(&format!("{executable} ")) {
             continue;
         }
-        if command.contains(" --remote-debugging-port=") {
+        if !include_managed && command.contains(" --remote-debugging-port=") {
             return Ok(None);
         }
         ordinary_pid = line[..separator].parse().ok();
@@ -1364,16 +1382,17 @@ fn find_codex_app(_home_directory: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "windows")]
-fn ordinary_codex_process(app_path: &Path, codex_profile: &Path) -> Result<Option<u32>, String> {
+fn codex_process(app_path: &Path, codex_profile: &Path, include_managed: bool) -> Result<Option<u32>, String> {
     let output = StdCommand::new("powershell.exe")
         .args([
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "$ErrorActionPreference = 'Stop'; $app = $env:CODEX_PANEL_CODEX_APP_PATH; $profile = $env:CODEX_PANEL_CODEX_PROFILE; $name = [IO.Path]::GetFileName($app); $all = @(Get-CimInstance Win32_Process -Filter \"Name = '$name'\" | Where-Object { $_.ExecutablePath -eq $app }); $pids = @{}; foreach ($item in $all) { $pids[[uint32]$item.ProcessId] = $true }; $process = $all | Where-Object { $command = [string]$_.CommandLine; $isRoot = -not $pids.ContainsKey([uint32]$_.ParentProcessId); $usesManagedProfile = $command.IndexOf('--user-data-dir', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $command.IndexOf($profile, [StringComparison]::OrdinalIgnoreCase) -ge 0; $usesPrivateCdp = $command.IndexOf('--remote-debugging-pipe', [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $command.IndexOf('--remote-debugging-port', [StringComparison]::OrdinalIgnoreCase) -ge 0; $isManaged = $usesManagedProfile -and $usesPrivateCdp; $isRoot -and -not $isManaged } | Select-Object -First 1; if ($null -ne $process) { [Console]::Out.Write($process.ProcessId) }",
+            "$ErrorActionPreference = 'Stop'; $app = $env:CODEX_PANEL_CODEX_APP_PATH; $profile = $env:CODEX_PANEL_CODEX_PROFILE; $name = [IO.Path]::GetFileName($app); $all = @(Get-CimInstance Win32_Process -Filter \"Name = '$name'\" | Where-Object { $_.ExecutablePath -eq $app }); $pids = @{}; foreach ($item in $all) { $pids[[uint32]$item.ProcessId] = $true }; $process = $all | Where-Object { $command = [string]$_.CommandLine; $isRoot = -not $pids.ContainsKey([uint32]$_.ParentProcessId); $usesManagedProfile = $command.IndexOf('--user-data-dir', [StringComparison]::OrdinalIgnoreCase) -ge 0 -and $command.IndexOf($profile, [StringComparison]::OrdinalIgnoreCase) -ge 0; $usesPrivateCdp = $command.IndexOf('--remote-debugging-pipe', [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $command.IndexOf('--remote-debugging-port', [StringComparison]::OrdinalIgnoreCase) -ge 0; $isManaged = $usesManagedProfile -and $usesPrivateCdp; $isRoot -and ($env:CODEX_PANEL_INCLUDE_MANAGED -eq '1' -or -not $isManaged) } | Select-Object -First 1; if ($null -ne $process) { [Console]::Out.Write($process.ProcessId) }",
         ])
         .env("CODEX_PANEL_CODEX_APP_PATH", app_path)
         .env("CODEX_PANEL_CODEX_PROFILE", codex_profile)
+        .env("CODEX_PANEL_INCLUDE_MANAGED", if include_managed { "1" } else { "0" })
         .output()
         .map_err(|error| error.to_string())?;
     if !output.status.success() {
@@ -1462,7 +1481,7 @@ fn find_codex_app(_home_directory: &Path) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "linux")]
-fn ordinary_codex_process(app_path: &Path, codex_profile: &Path) -> Result<Option<u32>, String> {
+fn codex_process(app_path: &Path, codex_profile: &Path, include_managed: bool) -> Result<Option<u32>, String> {
     let output = StdCommand::new("/bin/ps")
         .args(["-ww", "-axo", "pid=,ppid=,command="])
         .output()
@@ -1502,8 +1521,8 @@ fn ordinary_codex_process(app_path: &Path, codex_profile: &Path) -> Result<Optio
             !processes
                 .iter()
                 .any(|(candidate_pid, _, _)| candidate_pid == parent_pid && candidate_pid != pid)
-                && !(command.contains(" --remote-debugging-pipe")
-                    && command.contains(&format!(" {managed_profile}")))
+                && (include_managed || !(command.contains(" --remote-debugging-pipe")
+                    && command.contains(&format!(" {managed_profile}"))))
         })
         .map(|(pid, _, _)| *pid))
 }
@@ -1656,7 +1675,7 @@ fn monitor_renderer_readiness(
         let restart_required = !status.ready && {
             let app_path = state.snapshot.lock().unwrap().app_path.clone();
             app_path.as_deref().is_some_and(|path| {
-                ordinary_codex_process(Path::new(path))
+                codex_process(Path::new(path), &state.data_directory.join("codex-profile"), false)
                     .ok()
                     .flatten()
                     .is_some()
@@ -2075,11 +2094,8 @@ fn confirm_ordinary_codex_restart(
     state: &LauncherState,
     codex_app: &Path,
 ) -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    let ordinary_codex_pid = ordinary_codex_process(codex_app)?;
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
     let ordinary_codex_pid =
-        ordinary_codex_process(codex_app, &state.data_directory.join("codex-profile"))?;
+        codex_process(codex_app, &state.data_directory.join("codex-profile"), false)?;
     if let Some(codex_pid) = ordinary_codex_pid {
         if !UpdateDialog::confirm_codex_restart(app) {
             append_log(state, "Codex restart deferred by user");
@@ -2417,6 +2433,7 @@ fn start_launcher(
 fn restart_launcher(
     app: &AppHandle,
     state: &Arc<LauncherState>,
+    restart_codex: bool,
 ) -> Result<LauncherSnapshot, String> {
     let (result, result_generation) = {
         let _lifecycle = state.lifecycle.lock().unwrap();
@@ -2434,12 +2451,31 @@ fn restart_launcher(
             let snapshot = state.snapshot.lock().unwrap();
             snapshot.phase == "restart_required" || snapshot.open_request_pending
         };
-        if !confirm_ordinary_codex_restart(app, state, &codex_app)? {
-            return Ok(state.snapshot.lock().unwrap().clone());
-        }
+        let codex_pid = if restart_codex {
+            let pid = codex_process(&codex_app, &state.data_directory.join("codex-profile"), true)?;
+            if pid.is_some() && !UpdateDialog::confirm_codex_restart(app) {
+                return Ok(state.snapshot.lock().unwrap().clone());
+            }
+            pid
+        } else {
+            if !confirm_ordinary_codex_restart(app, state, &codex_app)? {
+                return Ok(state.snapshot.lock().unwrap().clone());
+            }
+            None
+        };
+        // 先停自动重连，避免退出 Codex 时 injector 抢先重新启动旧配置的进程。
         stop_managed_child_locked(app, state);
         reset_recovery(state);
-        let result = start_launcher_locked(app, state, should_open);
+        let result = (|| {
+            if let Some(pid) = codex_pid {
+                append_log(state, &format!("Requesting explicit Codex restart for PID {pid}"));
+                // Pipe 模式下 Codex 可能已随 injector 的进程组退出。
+                if codex_process(&codex_app, &state.data_directory.join("codex-profile"), true)? == Some(pid) {
+                    quit_codex_normally(pid)?;
+                }
+            }
+            start_launcher_locked(app, state, should_open)
+        })();
         if result.is_err() {
             state.intentional_stop.store(false, Ordering::SeqCst);
         }
@@ -2538,7 +2574,21 @@ async fn reconnect_codex(
 ) -> Result<LauncherUiState, String> {
     let state = Arc::clone(state.inner());
     tauri::async_runtime::spawn_blocking(move || {
-        restart_launcher(&app, &state)?;
+        restart_launcher(&app, &state, false)?;
+        current_ui_state(&app, &state)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn restart_codex(
+    app: AppHandle,
+    state: State<'_, Arc<LauncherState>>,
+) -> Result<LauncherUiState, String> {
+    let state = Arc::clone(state.inner());
+    tauri::async_runtime::spawn_blocking(move || {
+        restart_launcher(&app, &state, true)?;
         current_ui_state(&app, &state)
     })
     .await
@@ -2618,7 +2668,7 @@ fn set_launcher_preference(
     key: String,
     enabled: bool,
 ) -> Result<LauncherPreferences, String> {
-    if !matches!(key.as_str(), "autoConnectCodex" | "autoOpenPanel" | "hideUsageBanner" | "customProviderQuotaFix") {
+    if !matches!(key.as_str(), "autoConnectCodex" | "autoOpenPanel" | "hideUsageBanner" | "customProviderQuotaFix" | "customProviderUltrafast") {
         return Err("未知的偏好设置".to_string());
     }
     update_preferences(&state, |preferences| match key.as_str() {
@@ -2626,6 +2676,7 @@ fn set_launcher_preference(
         "autoOpenPanel" => preferences.auto_open_panel = enabled,
         "hideUsageBanner" => preferences.hide_usage_banner = enabled,
         "customProviderQuotaFix" => preferences.custom_provider_quota_fix = enabled,
+        "customProviderUltrafast" => preferences.custom_provider_ultrafast = enabled,
         _ => unreachable!(),
     })
 }
@@ -2806,12 +2857,11 @@ fn install_prepared_update(app: &AppHandle, state: &Arc<LauncherState>) -> Resul
         return Ok(());
     };
     let lifecycle = state.lifecycle.lock().unwrap();
-    if state.exit.requested.load(Ordering::SeqCst) {
+    if !state.exit.begin_update(&state.update_installing) {
         dialog.close();
         *state.prepared_update.lock().unwrap() = Some((update, bytes));
         return Err("Codex Panel 正在退出。".into());
     }
-    state.update_installing.store(true, Ordering::SeqCst);
     let was_running = state.child.lock().unwrap().is_some();
     update_snapshot(app, state, |snapshot| {
         snapshot.update_ready = false;
@@ -2972,6 +3022,7 @@ fn main() {
             start_service,
             stop_service,
             reconnect_codex,
+            restart_codex,
             open_embedded_panel,
             open_browser_panel,
             open_codex,
@@ -3238,7 +3289,7 @@ fn main() {
                         let app = app.clone();
                         tauri::async_runtime::spawn_blocking(move || {
                             let _diagnostic = menu_diagnostics::Span::new(&state.log_path, "worker id=restart-service");
-                            if let Err(error) = restart_launcher(&app, &state) {
+                            if let Err(error) = restart_launcher(&app, &state, false) {
                                 append_log(
                                     &state,
                                     &format!("Launcher menu restart failed: {error}"),
@@ -3411,7 +3462,9 @@ fn main() {
                     let exit = Arc::clone(&state.exit);
                     let cleanup_app = app_handle.clone();
                     let exit_app = app_handle.clone();
-                    exit.begin(move || {
+                    let cleanup_state = Arc::clone(&state);
+                    exit.begin(&state.update_installing, move || {
+                        let state = cleanup_state;
                         append_log(&state, "Exit cleanup started");
                         let started = Instant::now();
                         stop_managed_child(&cleanup_app, &state);
@@ -3448,6 +3501,44 @@ mod tests {
     use uuid::Uuid;
 
     #[test]
+    fn update_and_exit_claims_are_mutually_exclusive() {
+        use std::sync::{Arc, Barrier};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        for _ in 0..64 {
+            let exit = Arc::new(super::ExitState::default());
+            let installing = Arc::new(AtomicBool::new(false));
+            let start = Arc::new(Barrier::new(2));
+            let update_exit = Arc::clone(&exit);
+            let update_installing = Arc::clone(&installing);
+            let update_start = Arc::clone(&start);
+            let update = std::thread::spawn(move || {
+                update_start.wait();
+                update_exit.begin_update(&update_installing)
+            });
+            start.wait();
+            exit.begin(&installing, || {}, || {});
+            let update_started = update.join().unwrap();
+            assert_ne!(update_started, exit.requested.load(Ordering::SeqCst),
+                "安装更新和退出只能有一方开始");
+        }
+    }
+
+    #[test]
+    fn quit_during_update_does_not_poison_exit_after_failed_install() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let exit = std::sync::Arc::new(super::ExitState::default());
+        let installing = AtomicBool::new(false);
+        assert!(exit.begin_update(&installing));
+        exit.begin(&installing, || panic!("安装时不能清理"), || panic!("安装时不能退出"));
+        assert!(!exit.requested.load(Ordering::SeqCst));
+        installing.store(false, Ordering::SeqCst);
+        let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+        exit.begin(&installing, || {}, move || { finished_tx.send(()).unwrap(); });
+        finished_rx.recv_timeout(std::time::Duration::from_secs(1)).unwrap();
+        assert!(!exit.begin_update(&installing), "退出后不能再开始安装");
+    }
+
+    #[test]
     fn exit_does_not_block_ui_on_lifecycle_lock_and_cleans_up_once() {
         use std::sync::{mpsc, Arc, Mutex};
         use std::sync::atomic::Ordering;
@@ -3461,13 +3552,13 @@ mod tests {
         let ui_exit = Arc::clone(&exit);
         let worker_lock = Arc::clone(&lifecycle);
         let ui = std::thread::spawn(move || {
-            ui_exit.begin(move || { drop(worker_lock.lock().unwrap()); }, move || {
+            ui_exit.begin(&super::AtomicBool::new(false), move || { drop(worker_lock.lock().unwrap()); }, move || {
                 finished_tx.send(()).unwrap();
             });
             returned_tx.send(()).unwrap();
         });
         returned_rx.recv_timeout(Duration::from_secs(1)).expect("退出不能阻塞 UI");
-        exit.begin(|| panic!("不能重复清理"), || panic!("不能重复退出"));
+        exit.begin(&super::AtomicBool::new(false), || panic!("不能重复清理"), || panic!("不能重复退出"));
         assert!(!exit.complete.load(Ordering::SeqCst));
         drop(held);
         finished_rx.recv_timeout(Duration::from_secs(1)).unwrap();

@@ -74,6 +74,10 @@ Each project dashboard asks Codex for a daily progress summary. A failed generat
 
 ## Tauri/Rust desktop manager
 
+The **Codex connection** card includes **Restart Codex** beside **Open Codex**. After confirmation, Panel stops its automatic reconnect worker, normally quits the running Codex app (including an already connected app), then starts the service and Codex again. This reloads core configuration such as the Ultrafast catalog and interrupts active tasks. Canceling the confirmation leaves both processes running. **Restart service** retains its existing reconnect behavior.
+
+On macOS, native and menu quit requests share a single background cleanup. The interface keeps processing events while managed processes stop; exit follows cleanup. Update installation retains its existing quit protection and restart path.
+
 The launcher and its embedded workflow editor use React with Radix Themes for consistent controls in light and dark mode. Runtime actions still use the existing Tauri command/event interface. For source builds, `npm run build:launcher` generates `dist/launcher`; `npm run app:prepare` builds both the Panel Web UI and launcher before packaging the runtime.
 
 ### Exhausted-usage banner visibility
@@ -85,6 +89,8 @@ The launcher separates **运行概览** (Runtime overview), with service status 
 This identifies account and workspace exhausted-usage banners by their React component business type, independently of title wording or language. It leaves other errors, model/image limits, account quotas, and usage enforcement unchanged. Unknown banner types or a future incompatible Codex component structure remain visible. Panel does not patch the installed Codex application.
 
 ### Custom-provider send availability
+
+Prepared mappings are reused if injection retries before the lazy composer module executes. Preference changes still apply to the existing quota and Ultrafast subscriptions; both adapters share the same module mapping.
 
 On reinjection, the adapter also discovers the original composer URL from existing import maps, so blob loading does not remove its adaptation.
 
@@ -137,6 +143,8 @@ CODEX_PANEL_HOST=127.0.0.1 npm run codex
 The wait duration is fixed. If no main renderer appears within 30 seconds, the launcher exits with `Timed out waiting for a Codex renderer target`.
 
 ## Switch between Panel and native Codex destinations
+
+When Codex retains multiple sidebars, Panel skips hidden or inert copies and moves its existing entry to the available sidebar as interactivity changes. Placement remains before Explore when that rail anchor exists, with the existing content-sidebar fallbacks otherwise. No setting is required.
 
 The rail entry preserves its native icon wrapper and alignment, uses the native inactive text color, and retains its original selected color. Native icons keep one React-owned SVG to avoid duplicate artwork during selection changes. Only history entries created by opening Panel, including their same-URL state replacements, can restore it; cached state copied into a new native destination does not reopen Panel. Clicking the currently selected native destination returns to that page without going back to a different destination.
 
@@ -206,6 +214,8 @@ Ordinary main tasks can be split into several sub-issues after approval. Keep th
 
 ## Link Jira requirements to repository issues
 
+Local planning and execution drafts use the visible Codex composer, ignoring hidden composers retained by other chats. Once the launcher confirms the Skills and prompt, Panel does not require the sent content to remain in the composer. Sending immediately after prefill still proceeds through conversation confirmation and linking; actual prefill failures remain visible.
+
 After an explicit request, `panelctl conversation bind JIRA_KEY` binds the current Codex conversation and initializes a missing planning record, including when the conversation was already bound. Read `jira planning get` again for `plan.version` before saving the Spec and publishing tickets. An existing plan, its Spec, and its planning conversation remain unchanged; binding does not send a prompt, start execution, or change Jira status.
 
 Conversation registration and chat model selection read Codex's paginated model metadata. They do not export full model prompts, so oversized debug model catalogs no longer block Jira binding, planning initialization, or chat creation and sending. Workflow Skill reads remain independent of model discovery.
@@ -266,3 +276,11 @@ Board filters offer default, name and priority sorting; display settings optiona
 Tasks and comments can carry an external session via `panelctl ... --agent-platform claude|pi|agy|grok --session-id ID`. Pi accepts the original session file path. External session attribution is separate from native Codex bindings; the UI copies a POSIX-shell resume command rather than opening an external app. Existing native Codex conversation actions remain available.
 
 Previously uploaded files missing from task or comment text are shown once as fallback attachments. Editing the body consumes that fallback so deliberately removed files are not repeatedly appended. In embedded Codex, ordinary file cards show local path and reveal actions on hover when a device-local copy is available; image and video controls retain their own behavior. Jira Cloud uses token-based enhanced-search pagination while Server/Data Center retains its existing search API.
+
+## Custom-provider Ultrafast
+
+Open **Preferences → Display & system → 显示自定义 API 的 Ultrafast 选项** (Show Ultrafast for custom APIs) for `gpt-6-astra` and `gpt-6.1-sol` when your local custom provider supports `ultrafast`. This independent switch defaults to off. Core model discovery must already be enabled (for example, `api_key_model_discovery = true` under `[features]` in your Codex `config.toml`). If discovery is disabled, the adapted catalog cannot be read and the model picker may be empty. Panel respects the existing discovery setting and does not change it when toggling Ultrafast. Restart Codex after changing this switch: its core caches model capabilities at process startup. Keep Panel running while using this option. First installation or an adapter upgrade also reloads the interface once.
+
+The thread provider takes precedence over the effective model configuration. For a known local provider other than `openai`, the enabled switch limits Ultrafast to the exact model IDs `gpt-6-astra` and `gpt-6.1-sol`, matching the [official supported list](https://learn.chatgpt.com/docs/agent-configuration/speed#ultrafast-mode) verified on October 13, 2026. Other models, including custom aliases and stale catalog entries, do not receive Ultrafast access. Official OpenAI and remote hosts retain native restrictions. Selecting Ultrafast uses the existing thread/default-setting writer and sends `serviceTier: "ultrafast"` through the native request path. Panel also registers a loopback `model_catalog_url` for the active custom provider: it preserves that provider's existing catalog, or reads the public catalog compiled into the installed CLI, and adds only the two supported models' Ultrafast tiers. This lets the core retain `service_tier: "ultrafast"` in the outgoing API request. The global `model_catalog_json` and official OpenAI provider settings are unchanged. The core uses the provider's existing API authentication when fetching its catalog; Panel never logs that authorization header. Turning the switch off restores the original user-layer provider catalog URL (or removes the field when it was inherited or absent); higher-priority profile or project catalog overrides are not changed; restart Codex to reload it. The saved speed preference is not deleted. An explicitly configured global `model_catalog_json` takes precedence and must already declare the required tiers; Panel does not overwrite that file. Actual support, latency and billing are determined by the provider. This applies to the native composer menu and ordinary sends; tool-created chats and notification replies retain their separate native account checks.
+
+The adapter replaces recognized native modules in memory without modifying the installed application. An unsupported client structure leaves native behavior intact and reports the unavailable adapter in the log.

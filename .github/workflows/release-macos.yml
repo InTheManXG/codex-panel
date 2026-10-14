@@ -108,3 +108,67 @@ jobs:
           NODE
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url,isDraft,tagName
+
+      # Send Telegram notification
+      - name: Send Telegram Notification
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        continue-on-error: true
+        run: |
+          # 检查必要的环境变量
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram credentials not configured, skipping notification"
+            exit 0
+          fi
+
+          if [ -n "$RELEASE_TAG" ]; then
+            TAG_NAME=${RELEASE_TAG#refs/tags/}
+          else
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          fi
+          VERSION=${TAG_NAME#v}
+          TAG_HASHTAG=$(printf '%s' "$TAG_NAME" | sed 's/[^[:alnum:]_]/_/g')
+          TAG_HASHTAG=${TAG_HASHTAG//_/\\_}
+          REPO="$GITHUB_REPOSITORY"
+
+          # 获取 tag message 内容并转义 Markdown 特殊字符
+          TAG_MESSAGE="$(git for-each-ref --format='%(contents)' "refs/tags/$TAG_NAME")"
+          TAG_MESSAGE="${TAG_MESSAGE//_/\\_}"
+          TAG_MESSAGE="${TAG_MESSAGE//\*/\\*}"
+          TAG_MESSAGE="${TAG_MESSAGE//\`/\\\`}"
+          TAG_MESSAGE="${TAG_MESSAGE//\[/\\[}"
+
+          # 限制消息长度（Telegram 消息限制 4096 字符，预留空间给头尾固定内容）
+          if [ ${#TAG_MESSAGE} -gt 3500 ]; then
+            TAG_MESSAGE="${TAG_MESSAGE:0:3500}..."
+          fi
+
+          # 构建消息内容
+          MESSAGE="🚀 *Codex Panel 新版本发布！*"$'\n'$'\n'
+          MESSAGE+="📦 版本号: \`${VERSION}\`"$'\n'$'\n'
+
+          # 添加更新内容
+          if [ -n "$TAG_MESSAGE" ]; then
+            MESSAGE+="${TAG_MESSAGE}"$'\n'$'\n'
+          fi
+
+          MESSAGE+="🔗 *相关链接:*"$'\n'
+          MESSAGE+="• [GitHub Release](https://github.com/${REPO}/releases/tag/${TAG_NAME})"$'\n'
+          MESSAGE+="• [macOS 通用版下载](https://github.com/${REPO}/releases/download/${TAG_NAME}/${RELEASE_DMG})"$'\n'$'\n'
+          MESSAGE+="#CodexPanel #Release #${TAG_HASHTAG}"
+
+          # 发送消息
+          curl --silent --show-error --fail-with-body \
+            -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -n \
+              --arg chat_id "${TELEGRAM_CHAT_ID}" \
+              --arg text "${MESSAGE}" \
+              '{
+                chat_id: $chat_id,
+                text: $text,
+                parse_mode: "Markdown",
+                disable_web_page_preview: true
+              }')" \
+            | jq -e '.ok == true' >/dev/null

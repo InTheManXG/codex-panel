@@ -14,7 +14,7 @@ export type LauncherSnapshot = {
   updateReady: boolean;
   appPath: string | null;
 };
-export type LauncherPreferences = { autoConnectCodex: boolean; autoOpenPanel: boolean; hideUsageBanner: boolean; customProviderQuotaFix: boolean };
+export type LauncherPreferences = { autoConnectCodex: boolean; autoOpenPanel: boolean; hideUsageBanner: boolean; customProviderQuotaFix: boolean; customProviderUltrafast: boolean };
 export type LauncherState = {
   snapshot: LauncherSnapshot;
   preferences: LauncherPreferences;
@@ -243,7 +243,10 @@ export function App() {
                 {cardAction("serviceToggle", hasProcess ? "stop_service" : "start_service", hasProcess ? "停止服务" : "启动服务", <LinearIcon name={hasProcess ? "pause" : "play"} />)}
                 {cardAction("restartService", "reconnect_codex", "重启服务", <span className="action-icon" aria-hidden="true">↻</span>, !hasProcess)}
               </Flex>}
-              {component.id === "codex" && <Flex className="card-actions">{cardAction("openCodex", "open_codex", "打开 Codex", <LinearIcon name="openExternal" />)}</Flex>}
+              {component.id === "codex" && <Flex className="card-actions" gap="2">
+                {cardAction("openCodex", "open_codex", "打开 Codex", <LinearIcon name="openExternal" />)}
+                {cardAction("restartCodex", "restart_codex", "重启 Codex", <span className="action-icon" aria-hidden="true">↻</span>)}
+              </Flex>}
               {component.id === "embedded" && <Flex className="card-actions">{needsRestart ? <Button ref={panelButton} id="panelAction" {...actionProps("reconnect_codex")}>重启 Codex 并连接</Button> : cardAction("panelAction", "open_embedded_panel", panelLabel, <LinearIcon name="panel" />, opening || queued, false, panelButton)}</Flex>}
             </div>)}</div>
             <Box mt="4">
@@ -278,6 +281,8 @@ export function App() {
                 <Setting id="hideUsageBanner" title="隐藏额度耗尽提示" detail="收起对话中的额度横幅，不改变实际额度" checked={preferences?.hideUsageBanner ?? false} disabled={!state || savingPreference} onChange={enabled => void savePreference("hideUsageBanner", enabled)} />
                 <Separator size="4" />
                 <Setting id="customProviderQuotaFix" title="移除账号额度不足时 API 发送限制" detail="仅限自定义 API；首次安装适配时重载一次，之后开关即时生效" checked={preferences?.customProviderQuotaFix ?? false} disabled={!state || savingPreference} onChange={enabled => void savePreference("customProviderQuotaFix", enabled)} />
+                <Separator size="4" />
+                <Setting id="customProviderUltrafast" title="显示自定义 API 的 Ultrafast 选项" detail="仅限本地自定义 API 的 GPT-6 Astra、GPT-6.1 Sol；默认关闭，更改后请重启 Codex，使用时保持 Panel 运行" checked={preferences?.customProviderUltrafast ?? false} disabled={!state || savingPreference} onChange={enabled => void savePreference("customProviderUltrafast", enabled)} />
                 <Separator size="4" />
                 <Setting id="followSystemAppearance" title="跟随系统外观" detail="自动适配 macOS 的浅色或深色模式" checked={followSystemAppearance} onChange={enabled => { setFollowSystemAppearance(enabled); window.localStorage.setItem("codex-panel.follow-system-appearance", String(enabled)); window.dispatchEvent(new CustomEvent("codex-panel-appearance-preference", { detail: enabled })); }} />
                 <Separator size="4" />

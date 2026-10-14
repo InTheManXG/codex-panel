@@ -1,6 +1,17 @@
 # Fork 维护说明
 
-退出响应与重试闪动（等待上游吸收；内部兼容性修复）：用户确认 2026-10-08 10:41 的约十秒退出停顿由强制退出结束，不能将系统 termination 日志当作清理成功。当前 Tao 的 AppKit 原生退出直接进入 `applicationWillTerminate`，绕过 Tauri `ExitRequested`；通过 `macos_exit.rs` 给原有代理补充缺失的 `applicationShouldTerminate:` 并刷新 AppKit 方法缓存，将 Dock/系统退出转交 Tauri，保留原代理其他行为；已有同名方法时拒绝覆盖。普通退出由 `ExitRequested` 暂缓，`ExitState` 在工作线程等待生命周期锁并仅清理一次，完成后重新请求退出；`Exit` 不再更新 UI 或重复停服务。进程停止前释放 child 状态锁，退出期间拒绝启动/重连及新安装，已在后台清理的更新重启仍按原流程放行。启动日志记录了适配模块执行、未就绪、再次执行；相同 source hash 且所需额度适配已经执行时仅重新绑定注入，不再整页 reload，初次安装及代码变化仍刷新。代码：`src-tauri/src/main.rs`、`src-tauri/src/macos_exit.rs`、`scripts/codex-injector.mjs`、`scripts/codex-injector-runtime.mjs`；验证：独立 AppKit 退出探针及 Rust 原生代理回调，Rust `exit_does_not_block_ui_on_lifecycle_lock_and_cleans_up_once` 与 `test/injector-host-runtime.test.mjs`，以及现有 injector、quota、reconnect 检查。来源定位：`git log -S'struct ExitState' -- src-tauri/src/main.rs`。合并保留更新安装保护、单次后台清理及适配安装判定；上游等价修复后移除。用户正在使用的应用未自动重启，实际退出及闪动效果待新版现场确认。
+发布 Telegram 通知（本次新增，长期保留）：沿用 sub2api `.github/workflows/release.yml` 的通知流程，在 `.github/workflows/release-macos.yml` 成功发布后使用 `TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID` 两个仓库 Secret 发送版本、标签更新内容、Release 与 macOS 下载链接；保留 Markdown 转义、3500 字符内容截断、缺凭据跳过及通知失败不影响发布。普通 Check 不通知。内部发布运维能力，不新增产品界面或产品更新日志；验证 YAML、Bash 语法及本地模拟发送载荷，真实 Telegram 投递未验证。来源定位 `git log -S'Send Telegram Notification' -- .github/workflows/release-macos.yml`；移除通知需求后删除。
+
+显式重启 Codex（本次新增，长期保留）：运行概览的 Codex 连接卡片新增重启按钮，`launcher/src/App.tsx` → `restart_codex` → `restart_launcher(..., true)`，`src-tauri/src/main.rs` 精确查找官方 App 主进程（包含已连接的 managed 进程），通过 `update_dialog.rs` 确认中断运行任务，取消无副作用；确认后先停止 injector 自动重连，再正常退出 Codex 并重启服务/官方 App，使核心重新加载 Ultrafast 等配置。原重启服务保留只重连已连接 Codex 的语义。验证包括 launcher 点击路径、类型检查与 macOS Rust 编译；真实当前 Codex 的中断重启需单独实测，Windows/Linux 此次仅静态审核。用户文档为中英文 README 与 `docs/fork-capabilities.md`，发布说明为中英文 CHANGELOG 未发布段。来源定位 `git log -S'async fn restart_codex' -- src-tauri/src/main.rs`；上游具备等价独立操作后重新评估。
+
+Ultrafast 核心模型目录（本次修复，等待上游吸收）：模型发现遵循原生配置，Ultrafast 开关不修改 `features.api_key_model_discovery`。桌面可能下发 discovery=false；使用适配目录的前提是模型发现已开启，用户层显式 true 优先于桌面 assignment。真实核心测试以显式用户配置验证桌面 false assignment 后仍有模型、出站保留 ultrafast，关闭 Ultrafast 后用户 discovery 设置仍保留；不预设 ultrafast_mode。真实请求 292976/293025 的原生 turn_input 收到 ultrafast，但核心记录 unset 且网关入站缺少 service_tier；直连 292993 入站/出站均保留，确认之前界面适配不完整。实际内置 CLI 0.162.0-alpha.17.2 隔离复现：内置 service_tiers 仅 priority；仅补两模型 ultrafast 后核心可发出参数。`scripts/codex-provider-ultrafast-catalog.mjs` 在托管 injector 启动前及偏好变化时，通过原生 config API 修改当前非 openai provider 的 model_catalog_url，提供仅回环监听的目录；原目录 URL 存在时保留其元数据，缺省时读取当前 CLI 内置完整目录，不使用缺字段的 model/list。只给 gpt-6-astra 和 gpt-6.1-sol 补 service_tiers，不写全局 model_catalog_json 或官方 provider。有效目录 URL 与用户层原值分别存于 Panel 数据目录，关闭开关仅恢复自己仍持有的用户层字段，保留继承关系；高优先级目录覆盖不改写，原生版本检查防止覆盖并发编辑。核心缓存目录及 provider URL，热写与 reloadUserConfig 不足以更新，需重启 Codex；运行时须保持 Panel 的目录服务在线。core 请求会带 provider 的 Authorization，不记录或返回该头。验证 `test/codex-provider-ultrafast-catalog.test.mjs`：目录保留、原配置恢复，以及显式指定测试二进制时的真实核心 baseline → 原线程恢复/新线程出站 ultrafast → 关闭恢复，全程临时 HOME/CODEX_HOME/workspace、本地模拟 API。来源定位 `git log -S'createUltrafastCatalogAdapter' -- scripts/codex-provider-ultrafast-catalog.mjs`。说明同步中英文 README/CHANGELOG、`docs/fork-capabilities.md#custom-provider-ultrafast`；原生核心对自定义 provider 提供等价 tier 能力后移除。真实 provider 是否实际使用该速度及响应 default 的问题独立于本修复，尚未确认。
+
+退出与更新互斥认领（本次整合补充，等待上游吸收）：本地审核发现 PR #28 分别检查 `exit.requested` 与 `update_installing` 的竞态，可能让更新与普通退出同时开始，更新失败后无法恢复服务。`ExitState::transition` 仅保护两者的检查与认领；锁外执行线程创建、进程等待及 UI 操作，主线程仍不等待生命周期锁。`begin_update` 与 `begin` 共用该短锁。验证 `update_and_exit_claims_are_mutually_exclusive`、`quit_during_update_does_not_poison_exit_after_failed_install` 及原单次清理测试；来源定位 `git log -S'fn begin_update' -- src-tauri/src/main.rs`。此为退出修复的内部并发整合，不增加新产品开关；用户说明沿用上述三项修复文档。
+
+PR #28 选择性整合（等待上游吸收）：保留贡献者 `dba44875ba8c12169635a69f19f33e1b4e7cc2db` 的历史，只吸收退出清理、可用侧栏过滤和模块映射去重。`src-tauri/src/macos_exit.rs` 将原生 AppKit 退出转交 Tauri；`src-tauri/src/main.rs` 的 `ExitState` 在后台单次清理，等待子进程前释放 child 锁，保留更新安装及重启保护。`inject/codex-panel.user.js` 遍历可用侧栏并监听 inert/hidden 变化；入口仍在 Explore 前，无 Explore 时沿用原内容侧栏回退，不吸收图标栏末尾布局。`scripts/codex-provider-quota.mjs` 的 `prepared` 标识避免模块延迟执行前重复创建 importmap，保留本地 Ultrafast 多模块映射与两个独立偏好开关。复用现有导航 key、心跳和重连规则，不重复引入 PR 早期实现。针对性验证：Rust 原生退出回调及单次非阻塞清理测试、`test/codex-sidebar-mount.test.mjs`、`test/codex-provider-quota.test.mjs`、`test/codex-provider-ultrafast.test.mjs` 和隔离浏览器挂载；真实已安装 App 的退出及更新重启仍待验证。用户说明：中英文 README、CHANGELOG 和 `docs/fork-capabilities.md`。上游等价吸收各项行为及验证后删除对应差异。
+
+自定义 provider Ultrafast（本次新增，长期保留）：独立 `customProviderUltrafast` 开关默认关闭，入口为启动器“偏好设置 → 显示与系统 → 显示自定义 API 的 Ultrafast 选项”。通过现有偏好保存、文件监听、可信心跳和 React 订阅即时更新菜单；核心目录能力仍需重启 Codex 才生效；线程 provider 优先于有效配置，仅已知 local 非 `openai` provider 的 `gpt-6-astra`、`gpt-6.1-sol` 获得 Ultrafast 权限和缺失目录项。名单依据 2026-10-13 官方 Speed 与 API Ultrafast 指南；开关开启时其他模型（含旧目录和自定义别名）禁止 Ultrafast，切换模型时同步重算选项及请求速度。原生菜单、选中图标、setter 与请求参数共用同一权限；保留原生保存路径，关闭不删除已存速度。`scripts/codex-provider-ultrafast.mjs` 结构识别 app-initial 的速度 hook/provider reader 与 app-primary 的菜单，和 quota adapter 合并到同一 importmap；未知结构不改写，官方及远程边界不变，不写 App 包。代码还涉及 injector、注入脚本、Launcher 偏好及两处打包清单。验证：`test/codex-provider-ultrafast.test.mjs`、`test/codex-provider-quota.test.mjs`、`launcher/src/App.spec.tsx`；本机原生模块改写、隔离模拟路径及安装后模块加载验证通过；2026-10-13 自定义 provider 的 Astra API 实发携带 `service_tier: ultrafast`，HTTP 200 但返回 `service_tier: default`，未证实服务端 Ultrafast 生效；原生界面实发与 6.1 Sol 实发尚未验证。用户文档：中英文 README、`docs/fork-capabilities.md#custom-provider-ultrafast`；发布记录：中英文未发布日志。来源定位：`git log -S'customProviderUltrafast' -- launcher/src/App.tsx`。上游原生按自定义 provider 暴露速度能力后重新评估并移除等价适配。
+
 
 连接状态与多窗口挂载隔离（本次修复，等待上游吸收）：`scripts/codex-injector.mjs` 的单窗口挂载失败只记录该窗口错误，继续尝试其他窗口；无任何成功窗口或保留连接时仍报告等待。`startPanelHostHeartbeats` 在独立的 2 秒定时器中维护已连接窗口的心跳，每连接不重叠，退出时停止；避免挂载等待超过 5 秒就绪阈值而误报断连。现场通过 target ID 定位持续失败的 `/space/local-page-…` 页面；当前原生 `main-B6ZOwXa3.js` 确认独立 Page 以 `window=page` 标识，并会以 `prewarm=1` 创建隐藏窗口。`isCodexTarget` 在连接和重载前排除此类窗口；未带独立窗口标记的主窗口 Page 不排除。 主窗口另有脚本正确但侧栏尚未渲染的现场记录（entryMounted=false、sourceMatches=true、sidebarCount=0）；`reconcileInjectionRuntime` 仅在补丁代码变化或额度模块首次准备成功时重载；sourceHash 只包含注入与额度适配源码，不包含服务地址、实例路径等连接配置。管理进程更换与挂载重试均保留当前文档、会话路由和草稿；hostCapability 变化时销毁旧 Panel 注入并在原文档重建，旧隔离桥监听器停止处理消息，由新心跳更新 startupToken；同版本实例保留自有 Panel 历史 key，避免返回失效或重开时重复入栈。首次升级到此修复因代码变化仍重载一次。失败日志记录目标标题与路由路径（不记录查询参数），避免再把未定位的页面误判成连接丢失。测试：`test/codex-window-target.test.mjs`、`test/injector-host-runtime.test.mjs`；用户说明：中英文 README、CHANGELOG 和 `docs/fork-capabilities.md`。来源定位：`git log -S'startPanelHostHeartbeats' -- scripts/codex-injector-runtime.mjs`；上游等价处理窗口失败与心跳后移除。
 
@@ -121,6 +132,8 @@ Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标�
 已有本地 `0.1.0` 开发版高于新的 `0.0.1-fork`，需手动安装一次独立版本；更新器不增加降级例外，之后按版本递增更新。
 
 ## 活跃 Fork 能力
+
+- 原生预填成功后的误报修复（本次变更，等待上游吸收）：`waitForPreparedComposer` 只选择可见输入框；本地路径在预填前定位并记录待发送关联，Skill 与全文校验仍由 Launcher 完成，成功后不再要求草稿留在输入框。发送监听先于预填，关联确认等待准备结束，已有会话保留 `previousTurnId`；预填失败清理待关联并保留真实错误。代码：`inject/codex-panel.user.js`；针对性验证：`test/inject-composer-preparation.test.mjs`、`test/inject.test.mjs`、`test/injector-composer-prefill.test.mjs`。用户说明：中英文 README、CHANGELOG 与 `docs/fork-capabilities.md#link-jira-requirements-to-repository-issues`。来源定位：`git log -S'预填充由 Launcher 校验' -- inject/codex-panel.user.js`。合并保留先监听发送、后确认实际会话的顺序；上游等价处理可见输入框与立即发送后移除。
 
 - 原生对话预填诊断（维护用途）：`scripts/codex-injector.mjs` 记录 `panel.app-server.request` 的方法、请求 ID、host、会话 ID、实际超时、耗时及响应匹配计数；`panel.composer.prepare` 区分读取上一轮与预填，`panel.composer.prefill` 定位编辑器、Skill、文本插入及确认阶段。日志进入启动器 stderr，不记录提示词、消息正文、凭据或 Skill 路径。不调整超时或重试语义。验证：`node --test test/injector.test.mjs`；来源定位：`git log -S'panel.app-server.request' -- scripts/codex-injector.mjs`。待真实复现定位根因后重新评估日志保留范围。
 
@@ -445,37 +458,6 @@ Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标�
 - 尚未合并的上游独有工作属于待合并输入，不属于 Fork 能力。
 - 截至上游 `1.1.6`，Tauri/Rust 桌面基础、新版 AI Composer、Agent/Skill/命令补全、可搜索 Issue 关系选择器、富文本剪贴板、项目 README、全项目视图、Linux 桌面打包、WSL CLI 访问 Windows launcher 和 Issue 跨项目移动已经进入 Fork；上游品牌与更新签名公钥、上游发布工作流、`taskctl` 主命名和与 Fork 发布策略冲突的打包入口仍明确排除。
 - 上游 `1.1.6` 的单连接 Jira REST 基础同步、直接回写、主题化 Issue 属性菜单和 Issue 跨项目移动已经等价吸收；Fork 仅继续维护本文记录的可靠同步、Bearer 认证和跨仓库关联扩展。
-
-### 首页重试不触发页面恢复
-
-- 生命周期：等待上游吸收；内部兼容修复。输入框模块可能延迟执行，不能把未执行等同于适配未准备。quota runtime 在 importmap 插入成功后记录 `prepared`，重复执行仅同步设置；连接重试在同一源码且映射已准备时不再刷新 Codex。首次准备、源码变化仍保留必要重载，`installed` 继续只表示原生模块实际执行。
-- 代码：`scripts/codex-provider-quota.mjs`、`scripts/codex-injector.mjs`、`scripts/codex-injector-runtime.mjs`。验证：`node --test test/injector-host-runtime.test.mjs test/codex-provider-quota.test.mjs test/injector.test.mjs`，覆盖首页未加载模块的连续重试不刷新、映射仅安装一次及首次刷新保留。用户确认退出 Panel 后跳转停止；现场日志存在侧边栏未挂载重试，修复后真实页面行为仍待新包确认。上游具备等价状态区分后移除。
-
-### 多侧边栏入口定位
-
-- 生命周期：等待上游吸收。新版侧边栏通过 `inert` 切换可交互状态；入口遍历侧边栏并跳过 inert、hidden 或无高度节点，旧滚动区域及 Free 账号新聊天入口同样过滤。监听 inert/hidden 变化，在原生切换后迁移同一个入口，不覆盖新聊天。
-- 代码：`inject/codex-panel.user.js`；验证：`test/codex-sidebar-mount.test.mjs` 覆盖前置 inert 侧边栏、激活切换、唯一入口与点击；`test/inject.test.mjs` 保留旧布局与本地化定位覆盖。该改动解决已复现的选择器缺陷，实际更新后窗口中的恢复效果仍待用户确认。
-
-### 左侧图标栏任务面板入口
-
-- 用户指定将入口移到最左侧竖向图标栏。新版优先使用 `data-app-navigation-rail` 内原生导航的滚动区，在现有导航下方、账户区之前放置独立图标按钮；悬停标题与无障碍名称保留“任务面板”，点击沿用 `openPanel`。内容侧边栏不再重复放置文字入口，收起内容侧边栏不影响图标。没有图标栏的旧布局保留原入口。
-- 代码：`inject/codex-panel.user.js`；验证：`test/codex-sidebar-mount.test.mjs` 直接检查挂载位置、图标与标题、唯一入口及内容侧边栏收起后点击；实际 App 视觉位置待新包确认。生命周期：Fork 产品入口布局。
-
-### 图标栏选中态与首页返回
-
-- 点击原生图标栏目的地时先关闭面板覆盖层，再让原生点击照常执行；底层已在首页、路由不变化时也能退出面板。面板打开时暂时淡化原生图标栏选中项，关闭时恢复原 aria-current（原值不存在时移除属性）；面板按钮以 aria-current 区分淡色未选中与深色选中，不继承原生按钮的当前状态。
-- 代码：`inject/codex-panel.user.js`。验证：`test/codex-sidebar-mount.test.mjs` 使用真实关闭函数验证首页无路由变化时关闭覆盖层、恢复原生选中态且不阻止原生点击；相关注入检查一起通过。真实主题配色和视觉效果待安装确认。生命周期：Fork 产品入口布局修复。
-
-### 原生目的地恢复旧面板路由
-
-- 用户确认复现路径为“面板 → 空间 → 首页”。原生目的地恢复会携带缓存的 location.state，仅关闭覆盖层不足以清除 Panel 标记的效果。图标栏原生点击记录明确的离开意图；直到用户再次点击面板，不因恢复旧 `__codexPanel` 标记自动打开。不改写原生路由、不拦截原生点击；未发生原生图标栏离开操作的前进后退行为继续沿用现有历史。
-- 验证：`test/inject.test.mjs` 按完整三步路径复现旧源码失败，覆盖同步/异步导航与再次手动打开面板。真实 App 验证待新包安装。代码：`inject/codex-panel.user.js`；生命周期：Fork 导航兼容修复。
-
-### PR #28 上游整合
-
-- 合并上游 `6ecb51f` 后，导航统一采用上游 `panelLocationKeys` 和 REPLACE 归属迁移，取代本地 `nativeRailDismissedPanel` 布尔拦截；复制到新历史 key 的旧标记不会打开面板，同时保留 Back/Forward。完整“面板 → 空间 → 首页”用例迁入 `test/inject-navigation-regression.test.mjs`，覆盖同步和异步提交。上文旧关闭标记说明属于整合前实现，不再生效。
-- 重连统一采用上游 `reloadRequired` 与 `quotaBootstrapPrepared`，保留其独立心跳、隐藏 Page 窗口排除和多窗口失败隔离；额度 runtime 内部仍用 `prepared` 防止重复创建 importmap。保留上游无菜单身份读取和图标重绘修复。
-- 入口位置以用户指定为准：有导航滚动区时位于现有图标末尾、头像前；没有该结构时保留上游 Explore 前兼容入口。保留可见侧边栏遍历与原生深浅色/填充状态。macOS 退出仍使用本分支单次异步清理与 AppKit 代理修复。
 
 ### 横向列表与 Jira 项目筛选
 

@@ -19,7 +19,7 @@ it("keeps launcher feedback, live status and global preferences working through 
       updateMessage: "尚未检查更新。", updateAvailable: false, updateReady: false,
       appPath: "/disposable/Codex.app",
     },
-    preferences: { autoConnectCodex: true, autoOpenPanel: true, hideUsageBanner: false, customProviderQuotaFix: false },
+    preferences: { autoConnectCodex: true, autoOpenPanel: true, hideUsageBanner: false, customProviderQuotaFix: false, customProviderUltrafast: false },
     autostart: true, dataDirectory: "/disposable/panel-data", logPath: "/disposable/panel.log",
   };
   let statusListener!: (event: { payload: LauncherSnapshot }) => void;
@@ -63,6 +63,7 @@ it("keeps launcher feedback, live status and global preferences working through 
   expect(document.getElementById("panelComponent")?.contains(button("serviceToggle"))).toBe(true);
   expect(document.getElementById("panelComponent")?.contains(button("restartService"))).toBe(true);
   expect(document.getElementById("codexComponent")?.contains(button("openCodex"))).toBe(true);
+  expect(document.getElementById("codexComponent")?.contains(button("restartCodex"))).toBe(true);
   expect(document.querySelector(".page-heading")?.contains(button("browserPanel"))).toBe(true);
   expect(document.querySelector(".sidebar-footer")).toBeNull();
   expect(screen.queryByRole("button", { name: "检查更新" })).toBeNull();
@@ -90,6 +91,9 @@ it("keeps launcher feedback, live status and global preferences working through 
   await click(button("openCodex"));
   await advance(300);
   expect(invoke).toHaveBeenCalledWith("open_codex");
+  await click(button("restartCodex"));
+  await advance(300);
+  expect(invoke).toHaveBeenCalledWith("restart_codex");
 
   await click(button("restartService"));
   expect(button("restartService").getAttribute("aria-busy")).toBe("true");
@@ -149,7 +153,7 @@ it("keeps launcher feedback, live status and global preferences working through 
   await click(autoConnect);
   expect(autoOpen.disabled).toBe(false);
   await click(screen.getByRole("switch", { name: "隐藏额度耗尽提示" }));
-  expect(current.preferences).toEqual({ autoConnectCodex: true, autoOpenPanel: true, hideUsageBanner: true, customProviderQuotaFix: false });
+  expect(current.preferences).toEqual({ autoConnectCodex: true, autoOpenPanel: true, hideUsageBanner: true, customProviderQuotaFix: false, customProviderUltrafast: false });
   const quotaFix = screen.getByRole("switch", { name: "移除账号额度不足时 API 发送限制" });
   const restartCount = invoke.mock.calls.filter(([command]) => command === "reconnect_codex").length;
   await click(quotaFix);
@@ -158,6 +162,13 @@ it("keeps launcher feedback, live status and global preferences working through 
   await click(quotaFix);
   expect(invoke).toHaveBeenCalledWith("set_launcher_preference", { key: "customProviderQuotaFix", enabled: false });
   expect(quotaFix.getAttribute("aria-checked")).toBe("false");
+  const ultrafast = screen.getByRole("switch", { name: "显示自定义 API 的 Ultrafast 选项" });
+  expect(ultrafast.getAttribute("aria-checked")).toBe("false");
+  await click(ultrafast);
+  expect(invoke).toHaveBeenCalledWith("set_launcher_preference", { key: "customProviderUltrafast", enabled: true });
+  expect(ultrafast.getAttribute("aria-checked")).toBe("true");
+  await click(ultrafast);
+  expect(invoke).toHaveBeenCalledWith("set_launcher_preference", { key: "customProviderUltrafast", enabled: false });
   expect(invoke.mock.calls.filter(([command]) => command === "reconnect_codex")).toHaveLength(restartCount);
   expect(screen.queryByRole("alertdialog")).toBeNull();
   expect(current.preferences.hideUsageBanner).toBe(true);
