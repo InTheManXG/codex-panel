@@ -476,3 +476,9 @@ Fork 使用独立的 `X.Y.Z-fork` 版本，从 `0.0.1-fork` 开始，发布标�
 - 合并上游 `6ecb51f` 后，导航统一采用上游 `panelLocationKeys` 和 REPLACE 归属迁移，取代本地 `nativeRailDismissedPanel` 布尔拦截；复制到新历史 key 的旧标记不会打开面板，同时保留 Back/Forward。完整“面板 → 空间 → 首页”用例迁入 `test/inject-navigation-regression.test.mjs`，覆盖同步和异步提交。上文旧关闭标记说明属于整合前实现，不再生效。
 - 重连统一采用上游 `reloadRequired` 与 `quotaBootstrapPrepared`，保留其独立心跳、隐藏 Page 窗口排除和多窗口失败隔离；额度 runtime 内部仍用 `prepared` 防止重复创建 importmap。保留上游无菜单身份读取和图标重绘修复。
 - 入口位置以用户指定为准：有导航滚动区时位于现有图标末尾、头像前；没有该结构时保留上游 Explore 前兼容入口。保留可见侧边栏遍历与原生深浅色/填充状态。macOS 退出仍使用本分支单次异步清理与 AppKit 代理修复。
+
+### 横向列表与 Jira 项目筛选
+
+- 横向列表保持每张议题卡片的内容高度，由列容器滚动，避免大量议题压缩卡片并使属性控件溢出。代码：`web/src/styles.css` 的横向列表卡片规则。
+- 复用 `TaskFilterMenu` 与 `taskFilters`，从已同步 Jira 议题 `externalKey` 的项目部分生成选项。Panel 的 `projectId` 是 Jira 汇总项目，不能用于区分 JR / JD。默认不限制项目，多选取并集并与其他筛选取交集；全部项目仅清空该项，项目选择随其他筛选保存到 URL。该项不改变 Jira 同步范围，不请求真实 Jira，也不写入任务数据。
+- 代码：`web/src/taskFilters.ts`、`web/src/components/TaskFilterMenu.tsx`；直接验证：`TaskFilterMenu.spec.tsx` 覆盖 JR/JD 选择、URL 回读及全部项目恢复时保留其他筛选。布局使用隔离浏览器的真实横向列表结构验证。生命周期：Fork 界面修复与筛选能力，实际安装效果待交付后确认。
