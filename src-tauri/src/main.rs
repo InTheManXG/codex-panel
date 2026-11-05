@@ -1081,6 +1081,10 @@ fn windows_directory() -> Result<PathBuf, String> {
 
 #[cfg(target_os = "windows")]
 fn verify_windows_launcher_signature() -> Result<(), String> {
+    // 本地未签名包仍保留 runtime 完整性校验；正式构建不设置此开关，继续强制证书校验。
+    if matches!(option_env!("CODEX_PANEL_ALLOW_UNSIGNED_WINDOWS"), Some("1" | "true")) {
+        return Ok(());
+    }
     let expected = option_env!("CODEX_PANEL_WINDOWS_CERTIFICATE_THUMBPRINT")
         .filter(|value| value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .ok_or_else(|| {

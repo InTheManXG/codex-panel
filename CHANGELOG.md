@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Allow explicitly marked local unsigned Windows test builds to start while keeping certificate verification mandatory for release builds.
+
 - Show output throughput (tok/s) and cache hit rate below local Codex composers using local session logs. Missing data shows `--`; API requests are unchanged.
 
 ## 0.4.14-fork
