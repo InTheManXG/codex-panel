@@ -6,6 +6,8 @@ This file records user-visible changes introduced by the fork.
 
 ## Unreleased
 
+- Normalize safe Windows verbatim resource paths before passing scripts to Node, fixing startup `EISDIR` errors and model configuration entry points.
+
 - Fix Rspack startup errors caused by the Dot preference signal and shadowed module loaders in Ultrafast settings and the custom-provider composer.
 
 - Adapt custom-provider sending, Ultrafast, Dot, conversation tabs and update status to Codex’s Rspack modules, including lazy-loaded modules, while retaining existing switches and conversation focus behavior.
