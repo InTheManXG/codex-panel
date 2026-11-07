@@ -1,4 +1,5 @@
 fn main() {
+    println!("cargo:rerun-if-env-changed=CODEX_PANEL_ALLOW_UNSIGNED_WINDOWS");
     println!("cargo:rerun-if-env-changed=CODEX_PANEL_UPDATER_PUBLIC_KEY");
     println!("cargo:rerun-if-env-changed=CODEX_PANEL_WINDOWS_CERTIFICATE_THUMBPRINT");
     println!("cargo:rerun-if-changed=resources/runtime-integrity.json");

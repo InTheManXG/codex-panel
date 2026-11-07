@@ -1166,6 +1166,10 @@ fn windows_directory() -> Result<PathBuf, String> {
 
 #[cfg(target_os = "windows")]
 fn verify_windows_launcher_signature() -> Result<(), String> {
+    // 仅专用测试包在编译期允许未签名；runtime 文件完整性校验仍执行。
+    if option_env!("CODEX_PANEL_ALLOW_UNSIGNED_WINDOWS") == Some("1") {
+        return Ok(());
+    }
     let expected = option_env!("CODEX_PANEL_WINDOWS_CERTIFICATE_THUMBPRINT")
         .filter(|value| value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
         .ok_or_else(|| {
@@ -4361,6 +4365,15 @@ mod tests {
         let error = super::reject_runtime_symlinks(&root).unwrap_err();
         assert!(error.contains("拒绝运行符号链接"));
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn unsigned_test_build_accepts_launcher() {
+        // 专用构建必须实际接受未签名 launcher，防止只设环境变量却漏带实现。
+        if option_env!("CODEX_PANEL_ALLOW_UNSIGNED_WINDOWS") == Some("1") {
+            assert!(super::verify_windows_launcher_signature().is_ok());
+        }
     }
 
     #[cfg(target_os = "windows")]
